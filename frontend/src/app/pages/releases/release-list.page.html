@@ -1,0 +1,100 @@
+<div class="page">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Releases</h1>
+      <p class="page-subtitle">Tracked batches of PRs across repos. Drafts collect work; in-progress is live.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" (click)="load()" [disabled]="loading()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <polyline points="23 4 23 10 17 10"/>
+          <polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Refresh
+      </button>
+      <a routerLink="/releases/new" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New release PRs
+      </a>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (rows().length) {
+    <div class="card">
+      <div class="card-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Sprint</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th class="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of rows()" class="clickable" [routerLink]="['/releases', r.id]">
+                <td style="font-weight: 500">{{ r.title }}</td>
+                <td class="mono">{{ r.sprintLabel || '—' }}</td>
+                <td>
+                  <span class="badge draft">{{ r.status }}</span>
+                </td>
+                <td class="muted">{{ r.createdAt | date: 'medium' }}</td>
+                <td class="actions" (click)="$event.stopPropagation()">
+                  <a class="btn btn-sm" [routerLink]="['/releases', r.id, 'add-prs']">Add PRs</a>
+                  <a class="btn btn-sm btn-ghost" [routerLink]="['/releases', r.id]">
+                    Open
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="card">
+      <div class="card-body">
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M4.5 16.5c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.5 0-3.5s-2.6-.9-3 .5z"/>
+              <path d="M12 15l-3-3a22 22 0 0 1 8-13c4 0 7 3 7 7a22 22 0 0 1-13 8z"/>
+              <circle cx="15" cy="9" r="2"/>
+            </svg>
+          </div>
+          <h3>No releases yet</h3>
+          <p>Start with a new batch or seed via API.</p>
+          <div class="actions">
+            <a routerLink="/releases/new" class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Create release
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,257 @@
+<div class="page page-narrow">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Repositories</h1>
+      <p class="page-subtitle">Map Azure DevOps repos to a team so release batches know which PAT and PR scope to use.</p>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (info()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ info() }}</div>
+    </div>
+  }
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <h3 class="card-title">Register repository</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="reg-team">Team</label>
+          <select id="reg-team" class="select" [ngModel]="registerTeamId()" (ngModelChange)="registerTeamId.set($event)">
+            <option value="">Select team…</option>
+            <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="reg-org">ADO organization</label>
+          <input id="reg-org" class="input mono" [ngModel]="org()" (ngModelChange)="org.set($event)" placeholder="my-org" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="reg-proj">ADO project</label>
+          <input id="reg-proj" class="input mono" [ngModel]="project()" (ngModelChange)="project.set($event)" placeholder="MyProject" />
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="reg-repo">Repository name or ID</label>
+          <input id="reg-repo" class="input mono" [ngModel]="repo()" (ngModelChange)="repo.set($event)" placeholder="payments-api" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="reg-alias">Alias / display name (optional)</label>
+          <input id="reg-alias" class="input" [ngModel]="serviceName()" (ngModelChange)="serviceName.set($event)" placeholder="Shown in releases" />
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="register()" [disabled]="busy()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Register
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Import from Azure DevOps</h3>
+        <p class="card-subtitle">Discover and import new repositories from your organization</p>
+      </div>
+      @if (importProjectName().trim()) {
+        <button
+          type="button"
+          class="btn btn-sm"
+          (click)="onImportProjectChange()"
+          [disabled]="busy() || importCatalogBusy()"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Refresh
+        </button>
+      }
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="import-org">Organization</label>
+          <select 
+            id="import-org"
+            class="select"
+            [ngModel]="importOrgId()"
+            (ngModelChange)="importOrgId.set($event); onImportOrgChange()"
+            [disabled]="busy() || importCatalogBusy()"
+          >
+            <option value="">Select organization…</option>
+            <option *ngFor="let o of adoOrgs()" [value]="o.id" [disabled]="!o.hasPatCredential">
+              {{ o.organizationDisplay }}{{ o.hasPatCredential ? '' : ' (no PAT)' }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="import-proj">Project</label>
+          <select 
+            id="import-proj"
+            class="select"
+            [ngModel]="importProjectName()"
+            (ngModelChange)="importProjectName.set($event); onImportProjectChange()"
+            [disabled]="busy() || importCatalogBusy() || !selectedAdoOrg()?.hasPatCredential"
+          >
+            <option value="">Select project…</option>
+            <option *ngFor="let p of importProjects()" [value]="p.name">{{ p.name }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="import-team">Team</label>
+          <select id="import-team" class="select" [ngModel]="importTeamId()" (ngModelChange)="importTeamId.set($event)" [disabled]="busy()">
+            <option value="">Select team…</option>
+            <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
+          </select>
+        </div>
+      </div>
+
+      @if (importProjectName().trim()) {
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: var(--s-4); margin-top: var(--s-2)">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s-3)">
+            <span style="font-weight: 600; font-size: 13px">Repositories</span>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              (click)="importSelectedRepos()"
+              [disabled]="busy() || importCatalogBusy() || importSelectedRepoIds().size === 0"
+            >
+              Import selected ({{ importSelectedRepoIds().size }})
+            </button>
+          </div>
+          
+          @if (importCatalogBusy()) {
+            <p class="muted">Loading repositories...</p>
+          } @else if (importRepos().length) {
+            <div style="display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto">
+              @for (r of importRepos(); track r.id) {
+                @let alreadyImported = isRepoAlreadyImported(r.name);
+                <label style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; transition: background 0.12s"
+                       [style.background]="importRepoSelected(r.id) ? 'var(--bg-3)' : alreadyImported ? 'var(--bg-2)' : 'transparent'"
+                       [style.opacity]="alreadyImported ? '0.6' : '1'"
+                       [style.cursor]="alreadyImported ? 'not-allowed' : 'pointer'"
+                       (mouseenter)="alreadyImported ? null : $any($event.target).style.background = 'var(--bg-3)'"
+                       (mouseleave)="alreadyImported ? null : ($any($event.target).style.background = importRepoSelected(r.id) ? 'var(--bg-3)' : 'transparent')">
+                  <input
+                    type="checkbox"
+                    class="checkbox"
+                    [checked]="importRepoSelected(r.id)"
+                    (change)="toggleImportRepo(r.id)"
+                    [disabled]="busy() || alreadyImported"
+                  />
+                  <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px">
+                    <span class="mono" style="font-size: 12.5px">{{ r.name }}</span>
+                    @if (alreadyImported) {
+                      <span class="badge ok" style="font-size: 10px">Already imported</span>
+                    }
+                  </div>
+                </label>
+              }
+            </div>
+          } @else {
+            <p class="muted">No repositories found.</p>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      <h3 class="card-title">Catalog</h3>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: var(--s-3)">
+        <select class="select" style="width: 180px; height: 28px; font-size: 12px" [ngModel]="filterTeamId()" (ngModelChange)="filterTeamId.set($event); refresh()">
+          <option value="">All teams</option>
+          <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
+        </select>
+      </div>
+    </div>
+    @if (rows().length) {
+      <div class="card-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Alias</th>
+                <th>ADO repo</th>
+                <th>Organization / project</th>
+                <th>Team</th>
+                <th class="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of rows()">
+                <td>
+                  <input
+                    class="input"
+                    type="text"
+                    style="width: 100%; max-width: 200px; height: 28px; font-size: 12px"
+                    [value]="r.serviceName ?? ''"
+                    (blur)="onAliasBlur(r, $event)"
+                    [disabled]="busy()"
+                    placeholder="Display name…"
+                  />
+                </td>
+                <td class="mono">{{ r.repositoryIdOrName }}</td>
+                <td class="muted" style="font-size: 12px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
+                <td>{{ teamLabel(r.teamId) }}</td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-danger" (click)="remove(r)" [disabled]="busy()">Remove</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card-body">
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </div>
+          <h3>No repositories registered</h3>
+          <p>Register repositories manually or import from Azure DevOps.</p>
+        </div>
+      </div>
+    }
+  </div>
+</div>

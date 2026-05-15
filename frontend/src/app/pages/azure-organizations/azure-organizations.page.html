@@ -1,0 +1,126 @@
+<div class="page page-narrow">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Azure DevOps Organizations</h1>
+      <p class="page-subtitle">Connect organizations and store PAT credentials per user.</p>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (info()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ info() }}</div>
+    </div>
+  }
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <h3 class="card-title">Add organization</h3>
+    </div>
+    <div class="card-body">
+      <div class="field" style="margin-bottom: var(--s-4)">
+        <label class="field-label" for="org-key">
+          Organization key <span class="req">*</span>
+        </label>
+        <input 
+          id="org-key"
+          class="input mono" 
+          [ngModel]="newOrgKey()" 
+          (ngModelChange)="newOrgKey.set($event)" 
+          placeholder="my-org" 
+        />
+        <div class="field-hint">The URL segment (e.g., dev.azure.com/<strong>my-org</strong>)</div>
+      </div>
+      <div class="field" style="margin-bottom: var(--s-4)">
+        <label class="field-label" for="org-display">Display name (optional)</label>
+        <input 
+          id="org-display"
+          class="input" 
+          [ngModel]="newOrgDisplay()" 
+          (ngModelChange)="newOrgDisplay.set($event)" 
+          placeholder="My Organization" 
+        />
+      </div>
+      <button type="button" class="btn btn-primary" (click)="create()" [disabled]="busy()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Add organization
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
+      </svg>
+      <h3 class="card-title">Connected organizations</h3>
+    </div>
+    @if (orgs().length) {
+      <div class="card-body flush">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: var(--s-3)">
+          @for (org of orgs(); track org.id) {
+            <a 
+              [routerLink]="['/settings/azure-organizations', org.id]"
+              class="row"
+              style="padding: var(--s-3) var(--s-4); border-radius: var(--r-3); border: 1px solid var(--border-subtle); background: var(--bg); transition: background 0.12s, border-color 0.12s; cursor: pointer; text-decoration: none; color: inherit"
+              (mouseenter)="$any($event.target).style.background = 'var(--bg-3)'; $any($event.target).style.borderColor = 'var(--border)'"
+              (mouseleave)="$any($event.target).style.background = 'var(--bg)'; $any($event.target).style.borderColor = 'var(--border-subtle)'"
+            >
+              <div style="flex: 1; min-width: 0">
+                <div style="font-weight: 500; font-size: 14px; margin-bottom: 2px">{{ org.organizationDisplay || org.organizationKey }}</div>
+                <div class="mono muted" style="font-size: 11px">{{ org.organizationKey }}</div>
+              </div>
+              @if (org.hasPatCredential) {
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px">
+                  <span class="badge ok dot">PAT stored</span>
+                  @if (org.patExpiresAt) {
+                    <span class="muted">Expires {{ org.patExpiresAt | date: 'shortDate' }}</span>
+                  }
+                </div>
+              } @else {
+                <span class="badge warn dot">No PAT</span>
+              }
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </a>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="card-body">
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
+            </svg>
+          </div>
+          <h3>No organizations</h3>
+          <p>Add your first Azure DevOps organization to get started.</p>
+        </div>
+      </div>
+    }
+  </div>
+</div>

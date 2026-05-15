@@ -1,0 +1,122 @@
+<div class="page">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Teams</h1>
+      <p class="page-subtitle">Define teams and optional parent teams (for backend / frontend / DevOps subteams).</p>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (info()) {
+    <div class="banner ok" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <div class="banner-body">{{ info() }}</div>
+    </div>
+  }
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <h3 class="card-title">Add team</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="team-name">Name</label>
+          <input 
+            id="team-name"
+            class="input" 
+            [ngModel]="newName()" 
+            (ngModelChange)="newName.set($event)" 
+            placeholder="Platform" 
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="team-parent">Parent team (optional)</label>
+          <select 
+            id="team-parent"
+            class="select" 
+            [ngModel]="newParentId()" 
+            (ngModelChange)="newParentId.set($event)"
+          >
+            <option value="">— None —</option>
+            <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="create()" [disabled]="busy()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Create team
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <h3 class="card-title">All teams</h3>
+    </div>
+    @if (teams().length) {
+      <div class="card-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Parent</th>
+                <th class="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of teams()">
+                <td style="font-weight: 500">{{ t.name }}</td>
+                <td class="muted">{{ parentName(t.parentTeamId) }}</td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-danger" (click)="remove(t)" [disabled]="busy()">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card-body">
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h3>No teams yet</h3>
+          <p>Create your first team to organize repositories and releases.</p>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,39 @@
+import { Routes } from '@angular/router';
+import { authGuard } from './auth/auth.guard';
+import { guestGuard } from './auth/guest.guard';
+import { AppShell } from './shell/app-shell';
+import { AzureOrganizationDetailPage } from './pages/azure-organizations/azure-organization-detail.page';
+import { AzureOrganizationsPage } from './pages/azure-organizations/azure-organizations.page';
+import { DashboardPage } from './pages/dashboard/dashboard.page';
+import { LoginPage } from './pages/login/login.page';
+import { RegisterPage } from './pages/register/register.page';
+import { ReleaseCreatePage } from './pages/release-create/release-create.page';
+import { ReleaseDetailPage } from './pages/releases/release-detail.page';
+import { ReleaseListPage } from './pages/releases/release-list.page';
+import { RepositoriesPage } from './pages/repositories/repositories.page';
+import { TeamsPage } from './pages/teams/teams.page';
+
+export const routes: Routes = [
+  { path: 'login', component: LoginPage, canActivate: [guestGuard] },
+  { path: 'register', component: RegisterPage, canActivate: [guestGuard] },
+  {
+    path: '',
+    component: AppShell,
+    canActivate: [authGuard],
+    children: [
+      // Absolute redirect avoids ambiguity with sibling routes under the empty parent.
+      { path: '', pathMatch: 'full', redirectTo: '/dashboard' },
+      { path: 'dashboard', component: DashboardPage },
+      // Static `releases/new` MUST be registered before `releases/:id`, or `:id` captures "new".
+      { path: 'releases/new', component: ReleaseCreatePage },
+      { path: 'releases/:releaseId/add-prs', component: ReleaseCreatePage },
+      { path: 'releases/:id', component: ReleaseDetailPage },
+      { path: 'releases', component: ReleaseListPage },
+      { path: 'teams', component: TeamsPage },
+      { path: 'repositories', component: RepositoriesPage },
+      { path: 'settings/azure-organizations', component: AzureOrganizationsPage },
+      { path: 'settings/azure-organizations/:orgId', component: AzureOrganizationDetailPage },
+      { path: 'settings/pat-credentials', redirectTo: '/settings/azure-organizations', pathMatch: 'full' }
+    ]
+  }
+];

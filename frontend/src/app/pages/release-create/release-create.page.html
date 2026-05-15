@@ -1,0 +1,261 @@
+<div class="page page-narrow">
+  @if (pageLoadError()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">{{ pageLoadError() }}</div>
+    </div>
+  }
+
+  @if (releaseBlocked()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">{{ releaseBlocked() }}</div>
+    </div>
+  }
+
+  @if (existingRelease(); as er) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">
+        You are adding another PR batch to this release. Sprint and title stay as stored. Pick a phase (each phase keeps its own set of PRs), then choose teams and repos below.
+      </div>
+    </div>
+  }
+
+  <div class="page-header">
+    <div class="titles">
+      <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
+        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
+        <span style="color: var(--text-4); font-size: 13px">/</span>
+        @if (existingRelease(); as er2) {
+          <a [routerLink]="['/releases', er2.id]" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">{{ er2.title }}</a>
+          <span style="color: var(--text-4); font-size: 13px">/</span>
+          <span style="color: var(--text-2); font-size: 13px">Add PRs</span>
+        } @else {
+          <span style="color: var(--text-2); font-size: 13px">New batch</span>
+        }
+      </div>
+      <h1 class="page-title">{{ existingRelease() ? 'Add pull requests to this release' : 'Create team PRs for a release' }}</h1>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: var(--s-2)">
+        <span class="badge draft" *ngIf="phase() === 'DevToMaster'">dev → master</span>
+        <span class="badge draft" *ngIf="phase() === 'MasterToProd'">master → prod</span>
+        <span class="badge">multi-team</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      <h3 class="card-title">Release details</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="sprint">Sprint label</label>
+          <input id="sprint" class="input mono" [ngModel]="sprintLabel()" (ngModelChange)="sprintLabel.set($event)" placeholder="2026/13" [readonly]="!!existingRelease()" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="title">Release title (stored)</label>
+          <input id="title" class="input" [ngModel]="releaseTitle()" (ngModelChange)="releaseTitle.set($event)" placeholder="Release sprint …" [readonly]="!!existingRelease()" />
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom: var(--s-4)">
+        <label class="field-label">Release phase</label>
+        <div style="display: flex; gap: var(--s-2)">
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
+                 [style.background]="phase() === 'DevToMaster' ? 'var(--bg-3)' : 'transparent'"
+                 [style.border-color]="phase() === 'DevToMaster' ? 'var(--primary)' : 'var(--border)'">
+            <input type="radio" name="phase" value="DevToMaster" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
+            <span style="font-size: 13px; font-weight: 500">Dev → Master</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
+                 [style.background]="phase() === 'MasterToProd' ? 'var(--bg-3)' : 'transparent'"
+                 [style.border-color]="phase() === 'MasterToProd' ? 'var(--primary)' : 'var(--border)'">
+            <input type="radio" name="phase" value="MasterToProd" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
+            <span style="font-size: 13px; font-weight: 500">Master → Prod</span>
+          </label>
+        </div>
+        <div class="field-hint">{{ phaseHint() }}</div>
+      </div>
+
+      <div class="field" style="margin-bottom: var(--s-4)">
+        <label class="field-label" for="pr-title">PR title (Azure DevOps)</label>
+        <input id="pr-title" class="input" [value]="prTitle()" disabled />
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-4)">
+        <div class="field">
+          <label class="field-label" for="from">From branch (optional)</label>
+          <input id="from" class="input mono" [ngModel]="fromBranch()" (ngModelChange)="fromBranch.set($event)" [placeholder]="phase() === 'DevToMaster' ? 'default: dev' : 'default: master'" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="to">To branch (optional)</label>
+          <input id="to" class="input mono" [ngModel]="toBranch()" (ngModelChange)="toBranch.set($event)" [placeholder]="phase() === 'DevToMaster' ? 'default: master' : 'default: prod'" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="desc">Description (optional)</label>
+          <input id="desc" class="input" [ngModel]="description()" (ngModelChange)="description.set($event)" placeholder="Notes for reviewers…" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Teams & repositories</h3>
+        <p class="card-subtitle">Include every team that should open PRs for this release</p>
+      </div>
+    </div>
+    <div class="card-body">
+      @if (teams().length) {
+        <div style="display: flex; flex-direction: column; gap: var(--s-4)">
+          @for (t of teams(); track t.id) {
+            <div style="border: 1px solid var(--border-subtle); border-radius: var(--r-3); overflow: hidden">
+              <label style="display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); background: var(--bg-2); cursor: pointer; transition: background 0.12s"
+                     (mouseenter)="$any($event.target).style.background = 'var(--bg-3)'"
+                     (mouseleave)="$any($event.target).style.background = 'var(--bg-2)'">
+                <input
+                  type="checkbox"
+                  class="checkbox"
+                  [checked]="teamIncluded(t.id)"
+                  (change)="toggleTeamIncluded(t.id, $any($event.target).checked)"
+                  [disabled]="isSubmitting()"
+                />
+                <span style="font-weight: 600; font-size: 14px; flex: 1">{{ t.name }}</span>
+                @if (teamIncluded(t.id) && selectedCountForTeam(t.id) > 0) {
+                  <span class="badge">{{ selectedCountForTeam(t.id) }} selected</span>
+                }
+              </label>
+
+              @if (teamIncluded(t.id)) {
+                <div style="padding: var(--s-3); background: var(--bg)">
+                  @if (reposForTeam(t.id).length) {
+                    <div style="display: flex; flex-direction: column; gap: 4px">
+                      @for (r of reposForTeam(t.id); track r.id) {
+                        <label style="display: flex; align-items: start; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; transition: background 0.12s"
+                               [style.background]="isRepoSelected(t.id, r.id) ? 'var(--bg-3)' : 'transparent'"
+                               (mouseenter)="$any($event.target).style.background = 'var(--bg-3)'"
+                               (mouseleave)="$any($event.target).style.background = isRepoSelected(t.id, r.id) ? 'var(--bg-3)' : 'transparent'">
+                          <input type="checkbox" class="checkbox" style="margin-top: 2px" [checked]="isRepoSelected(t.id, r.id)" (change)="toggleRepo(t.id, r.id)" [disabled]="isSubmitting()" />
+                          <div style="flex: 1; min-width: 0">
+                            <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px">{{ r.serviceName || r.repositoryIdOrName }}</div>
+                            <div class="mono muted" style="font-size: 11px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }} · {{ r.repositoryIdOrName }}</div>
+                          </div>
+                        </label>
+                      }
+                    </div>
+                  } @else {
+                    <div class="empty" style="padding: var(--s-4)">
+                      <div class="glyph">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                      </div>
+                      <h3>No repos registered</h3>
+                      <p>No repos registered for this team. <a routerLink="/repositories">Register repositories</a>.</p>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <h3>No teams</h3>
+          <p>Create teams first to organize repositories.</p>
+          <div class="actions">
+            <a routerLink="/teams" class="btn btn-primary">Create team</a>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (created()) {
+    <div class="card" style="margin-bottom: var(--s-5)">
+      <div class="card-header">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        <h3 class="card-title">Created PRs</h3>
+      </div>
+      <div class="card-body">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          @for (c of (created()?.results ?? []); track c.pullRequestId) {
+            <a 
+              [href]="c.url"
+              target="_blank"
+              rel="noopener"
+              class="row"
+              style="padding: var(--s-3); border: 1px solid var(--border-subtle); border-radius: var(--r-3); text-decoration: none; color: inherit; transition: all 0.12s"
+              (mouseenter)="$any($event.target).style.background = 'var(--bg-3)'; $any($event.target).style.borderColor = 'var(--border)'"
+              (mouseleave)="$any($event.target).style.background = 'transparent'; $any($event.target).style.borderColor = 'var(--border-subtle)'"
+            >
+              <div style="flex: 1; min-width: 0">
+                <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px">{{ c.repositoryIdOrName }}</div>
+                <div class="muted" style="font-size: 11px">PR #{{ c.pullRequestId }}</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">
+        <strong>Couldn't finish</strong>
+        <div style="margin-top: 2px; font-size: 12.5px">{{ error() }}</div>
+      </div>
+    </div>
+  }
+
+  <div style="display: flex; gap: var(--s-3); justify-content: flex-end">
+    @if (existingRelease(); as er3) {
+      <a [routerLink]="['/releases', er3.id]" class="btn">Cancel</a>
+    } @else {
+      <a routerLink="/releases" class="btn">Cancel</a>
+    }
+    <button class="btn btn-primary" type="button" [disabled]="isSubmitting() || !!releaseBlocked() || !!pageLoadError()" (click)="submit()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      @if (!isSubmitting()) {
+        <span>{{ existingRelease() ? 'Open PRs on this release' : 'Find or create release + open PRs' }}</span>
+      } @else {
+        <span>Working…</span>
+      }
+    </button>
+  </div>
+</div>

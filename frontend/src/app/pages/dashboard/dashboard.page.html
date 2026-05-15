@@ -1,0 +1,305 @@
+<div class="page">
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Welcome back{{ auth.user()?.displayName ? ', ' + (auth.user()?.displayName || '') + '.' : '.' }}</h1>
+      <p class="page-subtitle">Here's where things stand across your organization today.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" routerLink="/releases">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M4.5 16.5c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.5 0-3.5s-2.6-.9-3 .5z"/>
+          <path d="M12 15l-3-3a22 22 0 0 1 8-13c4 0 7 3 7 7a22 22 0 0 1-13 8z"/>
+          <circle cx="15" cy="9" r="2"/>
+        </svg>
+        View releases
+      </button>
+      <button class="btn btn-primary" routerLink="/releases/new">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        New release PRs
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted" style="margin-bottom: var(--s-6)">Loading dashboard…</p>
+  }
+
+  @if (data(); as d) {
+    <div class="stats" style="margin-bottom: var(--s-7)">
+      <div class="stat">
+        <div class="label">Active releases</div>
+        <div class="value">{{ d.stats.activeReleasesCount }}</div>
+        <div class="delta">{{ activeReleasesDelta(d.stats) }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Open PRs</div>
+        <div class="value">{{ d.stats.openPullRequestsCount }}</div>
+        <div class="delta">{{ openPrsDelta(d.stats) }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">PRs needing attention</div>
+        <div class="value">{{ d.stats.pullRequestsNeedingAttentionCount }}</div>
+        <div class="delta">{{ attentionDelta(d.stats) }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Registered repositories</div>
+        <div class="value">{{ d.stats.registeredRepositoriesCount }}</div>
+        <div class="delta">{{ reposDelta(d.stats) }}</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: var(--s-5); align-items: start">
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+            <path d="M4.5 16.5c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.5 0-3.5s-2.6-.9-3 .5z"/>
+            <path d="M12 15l-3-3a22 22 0 0 1 8-13c4 0 7 3 7 7a22 22 0 0 1-13 8z"/>
+            <circle cx="15" cy="9" r="2"/>
+          </svg>
+          <div style="flex: 1">
+            <h3 class="card-title">Active releases</h3>
+            <p class="card-subtitle">In-flight batches & their progress</p>
+          </div>
+          <button class="btn btn-sm btn-ghost" routerLink="/releases">
+            See all
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+        <div class="card-body">
+          @if (d.activeReleaseHighlights.length === 0) {
+            <div class="empty">
+              <div class="glyph">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <path d="M4.5 16.5c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.5 0-3.5s-2.6-.9-3 .5z"/>
+                  <path d="M12 15l-3-3a22 22 0 0 1 8-13c4 0 7 3 7 7a22 22 0 0 1-13 8z"/>
+                  <circle cx="15" cy="9" r="2"/>
+                </svg>
+              </div>
+              <h3>No active releases</h3>
+              <p>Start by creating your first release batch to track PRs across multiple repositories.</p>
+              <div class="actions">
+                <button class="btn btn-primary" routerLink="/releases/new">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Create release
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Sprint</th>
+                    <th>Status</th>
+                    <th class="actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of d.activeReleaseHighlights; track r.id) {
+                    <tr>
+                      <td style="font-weight: 500">{{ r.title }}</td>
+                      <td class="mono">{{ r.sprintLabel || '—' }}</td>
+                      <td><span class="badge draft">{{ r.status }}</span></td>
+                      <td class="actions">
+                        <a class="btn btn-sm btn-ghost" [routerLink]="['/releases', r.id]">
+                          Open
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                            <polyline points="9 18 15 12 9 6"/>
+                          </svg>
+                        </a>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <div style="flex: 1">
+            <h3 class="card-title">Setup checklist</h3>
+            <p class="card-subtitle">Get started with Azure Admin</p>
+          </div>
+          <span class="tag mono-tag">{{ checklistPercent(d.checklist) }}%</span>
+        </div>
+        <div class="card-body flush" style="padding: var(--s-3)">
+          <div class="checklist">
+            <div class="checklist-item">
+              <div class="ck-icon">
+                @if (d.checklist.hasAzureOrganization) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                } @else {
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                }
+              </div>
+              <div class="ck-body">
+                <div class="t">Connect an Azure DevOps organization</div>
+                <div class="d">Add your first organization to start managing releases.</div>
+              </div>
+              <button class="btn btn-sm btn-ghost" routerLink="/settings/azure-organizations">
+                Open
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+            <div class="checklist-item">
+              <div class="ck-icon">
+                @if (d.checklist.hasTeam) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                } @else {
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                }
+              </div>
+              <div class="ck-body">
+                <div class="t">Create teams to scope your repos</div>
+                <div class="d">Organize repositories into logical teams.</div>
+              </div>
+              <button class="btn btn-sm btn-ghost" routerLink="/teams">
+                Open
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+            <div class="checklist-item">
+              <div class="ck-icon">
+                @if (d.checklist.hasRegisteredRepository) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                } @else {
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                }
+              </div>
+              <div class="ck-body">
+                <div class="t">Register repositories to teams</div>
+                <div class="d">Connect your Azure DevOps repositories.</div>
+              </div>
+              <button class="btn btn-sm btn-ghost" routerLink="/repositories">
+                Open
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+            <div class="checklist-item">
+              <div class="ck-icon">
+                @if (d.checklist.hasRelease) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                } @else {
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                }
+              </div>
+              <div class="ck-body">
+                <div class="t">Open your first release</div>
+                <div class="d">Group PRs across repos and open them as one batch.</div>
+              </div>
+              <button class="btn btn-sm btn-ghost" routerLink="/releases/new">
+                Start
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top: var(--s-7)">
+      <div class="section-head">
+        <h2>Recent activity</h2>
+        <span class="sub">Last 48 hours</span>
+        <div class="actions">
+          <button type="button" class="btn btn-sm btn-ghost" (click)="reload()" [disabled]="loading()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          @if (d.recentActivity.length === 0) {
+            <div class="empty">
+              <div class="glyph">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+              </div>
+              <h3>No recent activity</h3>
+              <p>Activity from releases, PRs, and organizations will appear here.</p>
+            </div>
+          } @else {
+            <div style="display: flex; flex-direction: column; gap: 0">
+              @for (a of d.recentActivity; track $index) {
+                @if (a.href) {
+                  <a
+                    [routerLink]="a.href"
+                    class="row"
+                    style="padding: var(--s-3) var(--s-2); border-radius: var(--r-2); text-decoration: none; color: inherit; border-bottom: 1px solid var(--border-subtle)"
+                  >
+                    <div style="flex: 1; min-width: 0">
+                      <div style="font-weight: 500; font-size: 13.5px">{{ a.title }}</div>
+                      @if (a.subtitle) {
+                        <div class="muted" style="font-size: 12px">{{ a.subtitle }}</div>
+                      }
+                    </div>
+                    <span class="muted" style="font-size: 11px; white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
+                  </a>
+                } @else {
+                  <div class="row" style="padding: var(--s-3) var(--s-2); border-bottom: 1px solid var(--border-subtle)">
+                    <div style="flex: 1; min-width: 0">
+                      <div style="font-weight: 500; font-size: 13.5px">{{ a.title }}</div>
+                      @if (a.subtitle) {
+                        <div class="muted" style="font-size: 12px">{{ a.subtitle }}</div>
+                      }
+                    </div>
+                    <span class="muted" style="font-size: 11px; white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
