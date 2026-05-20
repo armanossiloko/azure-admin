@@ -1,5 +1,5 @@
 <Solution>
-  <Folder Name="/backend/">
-    <Project Path="backend/AzureAdmin.Api/AzureAdmin.Api.csproj" />
+  <Folder Name="/src-backend/">
+    <Project Path="src-backend/AzureAdmin.API/AzureAdmin.API.csproj" />
   </Folder>
 </Solution>
