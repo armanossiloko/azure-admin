@@ -6,7 +6,6 @@ import { AzureOrganizationDetailPage } from './pages/azure-organizations/azure-o
 import { AzureOrganizationsPage } from './pages/azure-organizations/azure-organizations.page';
 import { DashboardPage } from './pages/dashboard/dashboard.page';
 import { LoginPage } from './pages/login/login.page';
-import { RegisterPage } from './pages/register/register.page';
 import { ReleaseCreatePage } from './pages/release-create/release-create.page';
 import { ReleaseDetailPage } from './pages/releases/release-detail.page';
 import { ReleaseListPage } from './pages/releases/release-list.page';
@@ -15,16 +14,13 @@ import { TeamsPage } from './pages/teams/teams.page';
 
 export const routes: Routes = [
   { path: 'login', component: LoginPage, canActivate: [guestGuard] },
-  { path: 'register', component: RegisterPage, canActivate: [guestGuard] },
   {
     path: '',
     component: AppShell,
     canActivate: [authGuard],
     children: [
-      // Absolute redirect avoids ambiguity with sibling routes under the empty parent.
       { path: '', pathMatch: 'full', redirectTo: '/dashboard' },
       { path: 'dashboard', component: DashboardPage },
-      // Static `releases/new` MUST be registered before `releases/:id`, or `:id` captures "new".
       { path: 'releases/new', component: ReleaseCreatePage },
       { path: 'releases/:releaseId/add-prs', component: ReleaseCreatePage },
       { path: 'releases/:id', component: ReleaseDetailPage },

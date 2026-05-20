@@ -1,9 +1,21 @@
 {
+  "/api/auth": {
+    "target": "http://localhost:5063",
+    "secure": false
+  },
   "/api": {
     "target": "http://localhost:5063",
     "secure": false,
     "changeOrigin": true,
     "logLevel": "debug"
+  },
+  "/signin-oidc": {
+    "target": "http://localhost:5063",
+    "secure": false
+  },
+  "/signout-callback-oidc": {
+    "target": "http://localhost:5063",
+    "secure": false
   }
 }
 

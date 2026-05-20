@@ -10,6 +10,8 @@ public static class ApplicationServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AzureDevOpsOptions>(configuration.GetSection("AzureDevOps"));
+        services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
+        services.Configure<PostgresOptions>(configuration.GetSection(PostgresOptions.SectionName));
 
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<AzureDevOpsOrganizationService>();

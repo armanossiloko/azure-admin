@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using AzureAdmin.Api.Contracts;
-using AzureAdmin.Api.Models;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AzureAdmin.Api.Controllers.Auth;
@@ -10,76 +12,53 @@ namespace AzureAdmin.Api.Controllers.Auth;
 [Route("api/auth")]
 public sealed class AuthController : ControllerBase
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager;
-
-    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager)
-    {
-        _userManager = userManager;
-        _signInManager = signInManager;
-    }
-
-    [HttpPost("register")]
+    /// <summary>
+    /// Initiates the Keycloak OIDC authorization code flow.
+    /// After a successful login the browser is redirected to <paramref name="returnUrl"/>.
+    /// </summary>
+    [HttpGet("login")]
     [AllowAnonymous]
-    public async Task<ActionResult<CurrentUserDto>> Register([FromBody] RegisterRequest request)
+    public IActionResult Login([FromQuery] string? returnUrl)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-            return BadRequest(new { message = "Email and password are required." });
-
-        var email = request.Email.Trim();
-        var user = new ApplicationUser
+        var properties = new AuthenticationProperties
         {
-            Id = Guid.NewGuid(),
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-            DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim()
+            RedirectUri = SafeReturnUrl(returnUrl),
+            IsPersistent = true,
         };
-
-        var create = await _userManager.CreateAsync(user, request.Password);
-        if (!create.Succeeded)
-            return BadRequest(new { message = string.Join(" ", create.Errors.Select(e => e.Description)) });
-
-        await _signInManager.SignInAsync(user, isPersistent: true);
-
-        return Ok(new CurrentUserDto(user.Id, user.Email ?? email, user.DisplayName));
+        return Challenge(properties, OpenIdConnectDefaults.AuthenticationScheme);
     }
 
-    [HttpPost("login")]
-    [AllowAnonymous]
-    public async Task<ActionResult<CurrentUserDto>> Login([FromBody] LoginRequest request)
+    /// <summary>Signs the user out of the local session and triggers a Keycloak logout.</summary>
+    [HttpGet("logout")]
+    public IActionResult Logout()
     {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-            return BadRequest(new { message = "Email and password are required." });
-
-        var email = request.Email.Trim();
-        var user = await _userManager.FindByEmailAsync(email);
-        if (user is null)
-            return Unauthorized(new { message = "Invalid email or password." });
-
-        var result = await _signInManager.PasswordSignInAsync(user, request.Password, isPersistent: true, lockoutOnFailure: true);
-        if (!result.Succeeded)
-            return Unauthorized(new { message = "Invalid email or password." });
-
-        return Ok(new CurrentUserDto(user.Id, user.Email ?? email, user.DisplayName));
+        return SignOut(
+            new AuthenticationProperties { RedirectUri = "/" },
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            OpenIdConnectDefaults.AuthenticationScheme);
     }
 
-    [HttpPost("logout")]
-    [Authorize]
-    public async Task<IActionResult> Logout()
-    {
-        await _signInManager.SignOutAsync();
-        return NoContent();
-    }
-
+    /// <summary>Returns the current authenticated user's profile, derived from the session cookie.</summary>
     [HttpGet("me")]
     [Authorize]
-    public async Task<ActionResult<CurrentUserDto>> Me()
+    public ActionResult<CurrentUserDto> Me()
     {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (id is null || !Guid.TryParse(id, out var userId))
             return Unauthorized();
 
-        return Ok(new CurrentUserDto(user.Id, user.Email ?? user.UserName ?? "", user.DisplayName));
+        var email = User.FindFirstValue(ClaimTypes.Email) ?? "";
+        var displayName = User.FindFirstValue("displayName");
+
+        return Ok(new CurrentUserDto(userId, email, displayName));
+    }
+
+    /// <summary>Ensures return URLs are relative same-origin paths to prevent open-redirect attacks.</summary>
+    private static string SafeReturnUrl(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "/";
+        var url = raw.Trim();
+        return url.StartsWith('/') && !url.StartsWith("//") ? url : "/";
     }
 }
+

@@ -19,6 +19,7 @@ Desktop.ini
 !.env*.example
 **/appsettings.*.local.json
 **/appsettings.Local.json
+**/appsettings.Development.json
 secrets.json
 
 # Docker Compose overrides often contain machine-specific or secret values
