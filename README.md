@@ -1,6 +1,6 @@
 # Azure Admin
 
-Admin app for **teams**, **registered Azure DevOps repositories**, **release tracking**, and **per-user Azure DevOps organizations with PATs**. A **.NET** API and **Angular** SPA use **PostgreSQL**; **Docker Compose** can run Postgres and the combined API+SPA image.
+Admin app for **teams**, **registered Azure DevOps repositories**, **release tracking**, and **per-user Azure DevOps organizations with PATs**. A **.NET** API and **Angular** SPA use **PostgreSQL**; **Docker Compose** runs Postgres, the API, and an nginx frontend that proxies `/api` to the backend.
 
 ## Features
 
@@ -27,11 +27,11 @@ The API calls Azure DevOps with each user’s stored PAT; there is no global ADO
 ```text
 azure-admin/
 ├── package.json, angular.json, src/   # Angular SPA
-├── Dockerfile.backend                 # Combined API + SPA (compose)
-├── Dockerfile.frontend                # Standalone nginx SPA
+├── Dockerfile.backend                 # ASP.NET Core API
+├── Dockerfile.frontend                # Angular SPA (nginx)
 ├── nginx.frontend.conf
 ├── docker-compose.yml
-├── src-backend/AzureAdmin.API/        # .NET API, migrations, Dockerfile.backend
+├── src-backend/AzureAdmin.API/        # .NET API, migrations
 └── AzureAdmin.slnx
 ```
 
@@ -49,8 +49,10 @@ For local API runs, set `Postgres` and `Keycloak` in `src-backend/AzureAdmin.API
 docker compose up --build
 ```
 
-- API (includes built SPA): **http://localhost:5063**
+- App (nginx → API): **http://localhost:8080**
 - Postgres: **localhost:5432** (credentials from `.env`)
+
+Register **http://localhost:8080/signin-oidc** (and your logout redirect URL) in Keycloak when using Compose.
 
 ### Local development
 
@@ -58,12 +60,11 @@ docker compose up --build
 2. API: `cd src-backend/AzureAdmin.API && dotnet run` (default **http://localhost:5063**).
 3. SPA: `npm install && npm start` from the repo root (**http://localhost:4200**, proxies `/api` to the API via `proxy.conf.json`).
 
-Standalone images:
+Images (also built by Compose):
 
 ```bash
 docker build -f Dockerfile.backend .
 docker build -f Dockerfile.frontend .
-cd src-backend/AzureAdmin.API && docker build -f Dockerfile.backend .
 ```
 
 ## Database

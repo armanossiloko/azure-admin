@@ -10,7 +10,6 @@ trigger:
       - src-backend
       - AzureAdmin.slnx
       - Dockerfile.backend
-      - docker-compose.yml
       - azure-pipelines-backend.yml
 
 pr:
@@ -22,7 +21,6 @@ pr:
       - src-backend
       - AzureAdmin.slnx
       - Dockerfile.backend
-      - docker-compose.yml
       - azure-pipelines-backend.yml
 
 pool:
