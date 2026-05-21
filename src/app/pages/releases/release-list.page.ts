@@ -41,4 +41,14 @@ export class ReleaseListPage implements OnInit {
       this.loading.set(false);
     }
   }
+
+  protected async delete(id: string, title: string): Promise<void> {
+    if (!confirm(`Delete release "${title}"? This will remove all associated PRs and data.`)) return;
+    try {
+      await firstValueFrom(this.http.delete(`/api/releases/${id}`));
+      this.rows.update(rows => rows.filter(r => r.id !== id));
+    } catch {
+      this.error.set('Failed to delete release.');
+    }
+  }
 }

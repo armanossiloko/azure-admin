@@ -265,4 +265,16 @@ public sealed class ReleasesController : ControllerBase
         var teamName = await _db.Teams.Where(t => t.Id == request.TeamId).Select(t => t.Name).FirstAsync(cancellationToken);
         return CreatedAtAction(nameof(Get), new { id = releaseId }, new ReleaseTeamDto(rt.Id, request.TeamId, teamName));
     }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        var release = await _db.Releases.FindAsync([id], cancellationToken);
+        if (release is null)
+            return NotFound();
+
+        _db.Releases.Remove(release);
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
 }
