@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 
 type ReleaseTeam = { id: string; teamId: string; teamName: string };
@@ -76,7 +77,20 @@ type ReleaseDetail = {
   standalone: true,
   selector: 'app-release-detail-page',
   imports: [CommonModule, RouterLink],
-  templateUrl: './release-detail.page.html'
+  templateUrl: './release-detail.page.html',
+  styles: [`
+    :host ::ng-deep .md-preview h1 { font-size: 1.35em; font-weight: 700; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
+    :host ::ng-deep .md-preview h2 { font-size: 1.15em; font-weight: 600; margin: 20px 0 8px; }
+    :host ::ng-deep .md-preview h3 { font-size: 1.0em; font-weight: 600; margin: 16px 0 6px; }
+    :host ::ng-deep .md-preview h4 { font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 12px 0 6px; }
+    :host ::ng-deep .md-preview ul { margin: 0 0 10px; padding-left: 18px; }
+    :host ::ng-deep .md-preview li { margin: 3px 0; line-height: 1.55; }
+    :host ::ng-deep .md-preview p { margin: 0 0 8px; }
+    :host ::ng-deep .md-preview code { font-family: monospace; font-size: 0.85em; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; }
+    :host ::ng-deep .md-preview a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    :host ::ng-deep .md-preview a:hover { text-decoration: underline; }
+    :host ::ng-deep .md-preview strong { font-weight: 600; }
+  `]
 })
 export class ReleaseDetailPage implements OnInit {
   protected readonly prPhaseBuckets: { key: 'dev' | 'prod'; title: string }[] = [
@@ -89,11 +103,14 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly notesBusy = signal(false);
   protected readonly notesMessage = signal<string | null>(null);
   protected readonly copyMessage = signal<string | null>(null);
+  protected readonly previewOpen = signal(false);
+  protected readonly previewHtml = signal<SafeHtml>('');
 
   constructor(
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly http: HttpClient
+    private readonly http: HttpClient,
+    private readonly sanitizer: DomSanitizer
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -310,5 +327,67 @@ export class ReleaseDetailPage implements OnInit {
     const r = ref.trim();
     const p = 'refs/heads/';
     return r.toLowerCase().startsWith(p) ? r.slice(p.length) : r;
+  }
+
+  protected openPreview(): void {
+    const rel = this.release();
+    if (!rel) return;
+    const md = this.allNotesToMarkdown(rel);
+    this.previewHtml.set(this.sanitizer.bypassSecurityTrustHtml(this.mdToHtml(md)));
+    this.previewOpen.set(true);
+  }
+
+  protected closePreview(): void {
+    this.previewOpen.set(false);
+  }
+
+  private mdToHtml(md: string): string {
+    const lines = md.split('\n');
+    const out: string[] = [];
+    let inList = false;
+
+    for (const line of lines) {
+      const headingMatch = line.match(/^(#{1,4}) (.+)/);
+      if (headingMatch) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        const level = headingMatch[1].length;
+        out.push(`<h${level}>${this.fmtInline(headingMatch[2])}</h${level}>`);
+      } else if (line.startsWith('- ')) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${this.fmtInline(line.slice(2))}</li>`);
+      } else if (line.trim() === '') {
+        if (inList) { out.push('</ul>'); inList = false; }
+      } else {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<p>${this.fmtInline(line)}</p>`);
+      }
+    }
+    if (inList) out.push('</ul>');
+    return out.join('\n');
+  }
+
+  private fmtInline(raw: string): string {
+    // Extract markdown links before HTML-escaping so URLs stay intact
+    const links: string[] = [];
+    let s = raw.replace(/\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) => {
+      const safeLabel = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeUrl = url.replace(/"/g, '%22');
+      links.push(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`);
+      return `\x02${links.length - 1}\x02`;
+    });
+
+    // HTML-escape remaining text
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Bold **text**
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Inline code `text`
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Restore links
+    s = s.replace(/\x02(\d+)\x02/g, (_, i) => links[Number(i)]);
+
+    return s;
   }
 }
