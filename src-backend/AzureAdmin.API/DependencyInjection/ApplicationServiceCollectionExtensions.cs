@@ -21,6 +21,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<AzureDevOpsCatalogService>();
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();
+        services.AddSingleton<ConventionalCommitParser>();
+        services.AddSingleton<JiraReferenceExtractor>();
 
         return services;
     }

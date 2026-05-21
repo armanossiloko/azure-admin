@@ -239,7 +239,37 @@
                       @if (block.fetchedAt) {
                         <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
                       }
-                      @if (hasCommits(block)) {
+                      @if (block.commitGroups?.length) {
+                        <div style="display: flex; flex-direction: column; gap: var(--s-4)">
+                          @for (group of block.commitGroups!; track group.groupName) {
+                            <div>
+                              <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                              <div style="display: flex; flex-direction: column; gap: 4px">
+                                @for (c of group.commits; track c.commitId) {
+                                  <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                                    <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                    <div style="flex: 1; min-width: 0">
+                                      <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                        @if (c.scope) {
+                                          <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                        }
+                                        <span>{{ c.description }}</span>
+                                        @if (c.isBreaking) {
+                                          <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                        }
+                                        @for (jira of c.jiraReferences; track jira.key) {
+                                          <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                        }
+                                      </div>
+                                      <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                    </div>
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      } @else if (hasCommits(block)) {
                         <div style="display: flex; flex-direction: column; gap: 6px">
                           @for (c of commitsForBlock(block); track c.commitId) {
                             <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
@@ -284,7 +314,37 @@
                     @if (block.fetchedAt) {
                       <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
                     }
-                    @if (hasCommits(block)) {
+                    @if (block.commitGroups?.length) {
+                      <div style="display: flex; flex-direction: column; gap: var(--s-4)">
+                        @for (group of block.commitGroups!; track group.groupName) {
+                          <div>
+                            <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                            <div style="display: flex; flex-direction: column; gap: 4px">
+                              @for (c of group.commits; track c.commitId) {
+                                <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                                  <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                  <div style="flex: 1; min-width: 0">
+                                    <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                      @if (c.scope) {
+                                        <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                      }
+                                      <span>{{ c.description }}</span>
+                                      @if (c.isBreaking) {
+                                        <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                      }
+                                      @for (jira of c.jiraReferences; track jira.key) {
+                                        <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                      }
+                                    </div>
+                                    <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    } @else if (hasCommits(block)) {
                       <div style="display: flex; flex-direction: column; gap: 6px">
                         @for (c of commitsForBlock(block); track c.commitId) {
                           <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">

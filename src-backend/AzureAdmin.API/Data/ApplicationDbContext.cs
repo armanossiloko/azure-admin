@@ -23,6 +23,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
     public DbSet<ReleaseRepositoryCommitNotes> ReleaseRepositoryCommitNotes => Set<ReleaseRepositoryCommitNotes>();
     public DbSet<AzureDevOpsPatCredential> AzureDevOpsPatCredentials => Set<AzureDevOpsPatCredential>();
     public DbSet<UserAzureDevOpsOrganization> UserAzureDevOpsOrganizations => Set<UserAzureDevOpsOrganization>();
+    public DbSet<AppSettings> AppSettings => Set<AppSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,6 +144,13 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
                 .WithMany(x => x.ReleaseRepositoryCommitNotes)
                 .HasForeignKey(x => x.RegisteredRepositoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AppSettings>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.JiraBaseUrl).HasMaxLength(512);
+            e.Property(x => x.JiraProjectKey).HasMaxLength(64);
         });
     }
 }

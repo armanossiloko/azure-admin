@@ -10,6 +10,7 @@ import { ReleaseCreatePage } from './pages/release-create/release-create.page';
 import { ReleaseDetailPage } from './pages/releases/release-detail.page';
 import { ReleaseListPage } from './pages/releases/release-list.page';
 import { RepositoriesPage } from './pages/repositories/repositories.page';
+import { SettingsPage } from './pages/settings/settings.page';
 import { TeamsPage } from './pages/teams/teams.page';
 
 export const routes: Routes = [
@@ -27,6 +28,7 @@ export const routes: Routes = [
       { path: 'releases', component: ReleaseListPage },
       { path: 'teams', component: TeamsPage },
       { path: 'repositories', component: RepositoriesPage },
+      { path: 'settings', component: SettingsPage },
       { path: 'settings/azure-organizations', component: AzureOrganizationsPage },
       { path: 'settings/azure-organizations/:orgId', component: AzureOrganizationDetailPage },
       { path: 'settings/pat-credentials', redirectTo: '/settings/azure-organizations', pathMatch: 'full' }

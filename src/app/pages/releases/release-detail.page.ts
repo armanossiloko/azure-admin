@@ -29,6 +29,26 @@ type ReleaseCommitItem = {
   committedDate: string;
 };
 
+type JiraTicketRef = { key: string; url: string };
+
+type EnrichedCommitItem = {
+  commitId: string;
+  authorName: string;
+  committedDate: string;
+  rawComment: string;
+  conventionalType: string | null;
+  scope: string | null;
+  description: string;
+  isBreaking: boolean;
+  jiraReferences: JiraTicketRef[];
+};
+
+type CommitGroup = {
+  groupName: string;
+  isBreaking: boolean;
+  commits: EnrichedCommitItem[];
+};
+
 type ReleaseRepositoryCommitNotes = {
   registeredRepositoryId: string;
   serviceName: string | null;
@@ -38,6 +58,7 @@ type ReleaseRepositoryCommitNotes = {
   targetRefName: string;
   fetchedAt: string;
   commits: ReleaseCommitItem[];
+  commitGroups?: CommitGroup[] | null;
 };
 
 type ReleaseDetail = {
@@ -250,6 +271,23 @@ export class ReleaseDetailPage implements OnInit {
 
     lines.push(`### ${repo}`);
     lines.push('', `\`${src}\` → \`${tgt}\``, '');
+
+    if (block.commitGroups?.length) {
+      for (const group of block.commitGroups) {
+        lines.push(`#### ${group.groupName}`, '');
+        for (const c of group.commits) {
+          const sha = c.commitId?.slice(0, 7) ?? '???????';
+          const scope = c.scope ? `(**${c.scope}**) ` : '';
+          const breaking = c.isBreaking ? ' **[BREAKING]**' : '';
+          const jiraLinks = c.jiraReferences?.length
+            ? ' ' + c.jiraReferences.map((j) => `[${j.key}](${j.url})`).join(' ')
+            : '';
+          lines.push(`- ${scope}${c.description}${jiraLinks}${breaking} (\`${sha}\`) — ${c.authorName}`);
+        }
+        lines.push('');
+      }
+      return lines.join('\n').trim();
+    }
 
     const commits = this.commitsForBlock(block);
     if (!commits.length) {

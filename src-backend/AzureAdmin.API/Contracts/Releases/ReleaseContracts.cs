@@ -56,6 +56,24 @@ public sealed record AddTeamToReleaseRequest(Guid TeamId);
 
 public sealed record ReleaseCommitItemDto(string CommitId, string Comment, string AuthorName, DateTimeOffset CommittedDate);
 
+public sealed record JiraTicketRefDto(string Key, string Url);
+
+public sealed record EnrichedCommitItemDto(
+    string CommitId,
+    string AuthorName,
+    DateTimeOffset CommittedDate,
+    string RawComment,
+    string? ConventionalType,
+    string? Scope,
+    string Description,
+    bool IsBreaking,
+    IReadOnlyList<JiraTicketRefDto> JiraReferences);
+
+public sealed record CommitGroupDto(
+    string GroupName,
+    bool IsBreaking,
+    IReadOnlyList<EnrichedCommitItemDto> Commits);
+
 public sealed record ReleaseRepositoryCommitNotesDto(
     Guid RegisteredRepositoryId,
     string? ServiceName,
@@ -64,4 +82,5 @@ public sealed record ReleaseRepositoryCommitNotesDto(
     string SourceRefName,
     string TargetRefName,
     DateTimeOffset FetchedAt,
-    IReadOnlyList<ReleaseCommitItemDto> Commits);
+    IReadOnlyList<ReleaseCommitItemDto> Commits,
+    IReadOnlyList<CommitGroupDto>? CommitGroups = null);

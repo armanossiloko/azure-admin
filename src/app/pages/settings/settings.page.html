@@ -1,0 +1,154 @@
+<div class="page">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Global application settings. Changes apply to all users.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || loading()">
+        <svg *ngIf="!saving()" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        {{ saving() ? 'Saving…' : 'Save changes' }}
+      </button>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (saved()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <div class="banner-body">Settings saved successfully.</div>
+    </div>
+  }
+
+  <!-- Conventional Commits -->
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <div>
+        <h3 class="card-title">Release Notes</h3>
+        <p class="card-subtitle">Control how commit messages are parsed and formatted in release notes.</p>
+      </div>
+    </div>
+    <div class="card-body" style="display: flex; flex-direction: column; gap: var(--s-4)">
+
+      <label class="row" style="gap: var(--s-4); cursor: pointer; align-items: flex-start">
+        <input type="checkbox" [(ngModel)]="form.conventionalCommitsEnabled" style="margin-top: 3px; flex-shrink: 0">
+        <div>
+          <div style="font-size: 14px; font-weight: 500">Conventional Commits</div>
+          <div class="muted" style="font-size: 12.5px; margin-top: 2px">
+            Parse commit messages as <code style="font-size: 11px">type(scope): description</code> and group release notes by category (feat → Features, fix → Bug Fixes, etc.)
+          </div>
+        </div>
+      </label>
+
+      @if (form.conventionalCommitsEnabled) {
+        <div style="margin-left: var(--s-6); display: flex; flex-direction: column; gap: var(--s-3); padding-left: var(--s-4); border-left: 2px solid var(--border-subtle)">
+
+          <label class="row" style="gap: var(--s-3); cursor: pointer; align-items: flex-start">
+            <input type="checkbox" [(ngModel)]="form.conventionalCommitsUseEmojis" style="margin-top: 3px; flex-shrink: 0">
+            <div>
+              <div style="font-size: 13px; font-weight: 500">Use emoji prefixes on group headers</div>
+              <div class="muted" style="font-size: 12px; margin-top: 1px">✨ Features, 🐛 Bug Fixes, ⚡️ Performance, etc.</div>
+            </div>
+          </label>
+
+          <label class="row" style="gap: var(--s-3); cursor: pointer; align-items: flex-start">
+            <input type="checkbox" [(ngModel)]="form.conventionalCommitsShowOtherGroup" style="margin-top: 3px; flex-shrink: 0">
+            <div>
+              <div style="font-size: 13px; font-weight: 500">Show "Other" group</div>
+              <div class="muted" style="font-size: 12px; margin-top: 1px">
+                Include commits that don't follow the conventional commit format in an "Other" section.
+                When disabled, non-conforming commits are hidden.
+              </div>
+            </div>
+          </label>
+
+        </div>
+      }
+
+    </div>
+  </div>
+
+  <!-- Jira Integration -->
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+      <div>
+        <h3 class="card-title">Jira Integration</h3>
+        <p class="card-subtitle">Extract Jira ticket references from commit messages and generate clickable links.</p>
+      </div>
+    </div>
+    <div class="card-body" style="display: flex; flex-direction: column; gap: var(--s-4)">
+
+      <label class="row" style="gap: var(--s-4); cursor: pointer; align-items: flex-start">
+        <input type="checkbox" [(ngModel)]="form.jiraEnabled" style="margin-top: 3px; flex-shrink: 0">
+        <div>
+          <div style="font-size: 14px; font-weight: 500">Extract Jira ticket references</div>
+          <div class="muted" style="font-size: 12.5px; margin-top: 2px">
+            Detect ticket keys in commit messages and render them as clickable links. Requires Conventional Commits to be enabled.
+          </div>
+        </div>
+      </label>
+
+      @if (form.jiraEnabled) {
+        <div style="margin-left: var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); padding-left: var(--s-4); border-left: 2px solid var(--border-subtle)">
+
+          <div>
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: var(--s-1)">
+              Project key
+            </label>
+            <input
+              type="text"
+              class="input"
+              [(ngModel)]="form.jiraProjectKey"
+              placeholder="e.g. BB_DEV"
+              style="max-width: 220px"
+            >
+            <div class="muted" style="font-size: 12px; margin-top: var(--s-1)">
+              The prefix used in your ticket numbers — e.g. <code style="font-size: 11px">BB_DEV</code> matches <code style="font-size: 11px">BB_DEV-1234</code>
+            </div>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: var(--s-1)">
+              Jira base URL
+            </label>
+            <input
+              type="url"
+              class="input"
+              [(ngModel)]="form.jiraBaseUrl"
+              placeholder="https://yourcompany.atlassian.net"
+              style="max-width: 400px"
+            >
+            <div class="muted" style="font-size: 12px; margin-top: var(--s-1)">
+              Used to build browse links: <code style="font-size: 11px">&#123;baseUrl&#125;/browse/&#123;ticket&#125;</code>
+            </div>
+          </div>
+
+        </div>
+      }
+
+    </div>
+  </div>
+</div>

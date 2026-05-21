@@ -19,17 +19,23 @@ public sealed class ReleasesController : ControllerBase
     private readonly ReleasePullRequestBatchService _batchService;
     private readonly ReleaseCommitNotesService _commitNotes;
     private readonly ICurrentUser _currentUser;
+    private readonly ConventionalCommitParser _commitParser;
+    private readonly JiraReferenceExtractor _jiraExtractor;
 
     public ReleasesController(
         ApplicationDbContext db,
         ReleasePullRequestBatchService batchService,
         ReleaseCommitNotesService commitNotes,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ConventionalCommitParser commitParser,
+        JiraReferenceExtractor jiraExtractor)
     {
         _db = db;
         _batchService = batchService;
         _commitNotes = commitNotes;
         _currentUser = currentUser;
+        _commitParser = commitParser;
+        _jiraExtractor = jiraExtractor;
     }
 
     [HttpGet]
@@ -140,10 +146,16 @@ public sealed class ReleasesController : ControllerBase
             .ThenBy(n => n.Phase)
             .ToListAsync(cancellationToken);
 
+        var appSettings = await _db.AppSettings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == AppSettings.SingletonId, cancellationToken)
+            ?? new AppSettings();
+
         var notesDtos = new List<ReleaseRepositoryCommitNotesDto>();
         foreach (var n in noteRows)
         {
             var commits = ReleaseCommitJson.Deserialize(n.CommitsJson);
+            var commitGroups = BuildCommitGroups(commits, appSettings);
             notesDtos.Add(new ReleaseRepositoryCommitNotesDto(
                 n.RegisteredRepositoryId,
                 n.RegisteredRepository.ServiceName,
@@ -152,7 +164,8 @@ public sealed class ReleasesController : ControllerBase
                 n.SourceRefName,
                 n.TargetRefName,
                 n.FetchedAt,
-                commits));
+                commits,
+                commitGroups));
         }
 
         return Ok(new ReleaseDetailDto(
@@ -276,5 +289,33 @@ public sealed class ReleasesController : ControllerBase
         _db.Releases.Remove(release);
         await _db.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    private IReadOnlyList<CommitGroupDto>? BuildCommitGroups(
+        IReadOnlyList<ReleaseCommitItemDto> commits,
+        AppSettings settings)
+    {
+        if (!settings.ConventionalCommitsEnabled || commits.Count == 0)
+            return null;
+
+        var items = commits.Select(c =>
+        {
+            var parsed = _commitParser.Parse(c.Comment);
+
+            IReadOnlyList<JiraTicketRefDto> jiraRefs = [];
+            if (settings.JiraEnabled
+                && !string.IsNullOrEmpty(settings.JiraProjectKey)
+                && !string.IsNullOrEmpty(settings.JiraBaseUrl))
+            {
+                var keys = _jiraExtractor.ExtractKeys(c.Comment, settings.JiraProjectKey);
+                jiraRefs = keys
+                    .Select(k => new JiraTicketRefDto(k, $"{settings.JiraBaseUrl!.TrimEnd('/')}/browse/{k}"))
+                    .ToList();
+            }
+
+            return (Commit: c, Parsed: parsed, JiraRefs: jiraRefs);
+        });
+
+        return _commitParser.BuildGroups(items, settings.ConventionalCommitsUseEmojis, settings.ConventionalCommitsShowOtherGroup);
     }
 }
