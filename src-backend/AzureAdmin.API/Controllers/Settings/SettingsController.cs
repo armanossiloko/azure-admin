@@ -43,7 +43,9 @@ public sealed class SettingsController : ControllerBase
 
         settings.ConventionalCommitsEnabled = request.ConventionalCommitsEnabled;
         settings.ConventionalCommitsUseEmojis = request.ConventionalCommitsUseEmojis;
-        settings.ConventionalCommitsShowOtherGroup = request.ConventionalCommitsShowOtherGroup;
+        settings.ExcludedGroups = request.ExcludedGroups?.Count > 0
+            ? string.Join(',', request.ExcludedGroups.Select(g => g.Trim()).Where(g => !string.IsNullOrEmpty(g)))
+            : null;
         settings.JiraEnabled = request.JiraEnabled;
         settings.JiraBaseUrl = string.IsNullOrWhiteSpace(request.JiraBaseUrl) ? null : request.JiraBaseUrl.Trim();
         settings.JiraProjectKey = string.IsNullOrWhiteSpace(request.JiraProjectKey)
@@ -57,7 +59,7 @@ public sealed class SettingsController : ControllerBase
     private static AppSettingsDto ToDto(AppSettings s) => new(
         s.ConventionalCommitsEnabled,
         s.ConventionalCommitsUseEmojis,
-        s.ConventionalCommitsShowOtherGroup,
+        s.GetExcludedGroupsSet().ToList(),
         s.JiraEnabled,
         s.JiraBaseUrl,
         s.JiraProjectKey);

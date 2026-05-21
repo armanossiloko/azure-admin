@@ -70,16 +70,33 @@
             </div>
           </label>
 
-          <label class="row" style="gap: var(--s-3); cursor: pointer; align-items: flex-start">
-            <input type="checkbox" [(ngModel)]="form.conventionalCommitsShowOtherGroup" style="margin-top: 3px; flex-shrink: 0">
-            <div>
-              <div style="font-size: 13px; font-weight: 500">Show "Other" group</div>
-              <div class="muted" style="font-size: 12px; margin-top: 1px">
-                Include commits that don't follow the conventional commit format in an "Other" section.
-                When disabled, non-conforming commits are hidden.
-              </div>
+          <div>
+            <div style="font-size: 13px; font-weight: 500; margin-bottom: var(--s-2)">Include in release notes</div>
+            <div class="muted" style="font-size: 12px; margin-bottom: var(--s-3)">
+              Unchecked groups are omitted from the release notes output. Breaking Changes are always included.
             </div>
-          </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s-2)">
+              @for (group of allGroups; track group.name) {
+                <label
+                  class="row"
+                  style="gap: var(--s-2); cursor: pointer; align-items: center; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--bg-2)"
+                  [style.opacity]="group.alwaysIncluded ? '0.6' : '1'"
+                >
+                  <input
+                    type="checkbox"
+                    [checked]="isGroupIncluded(group.name)"
+                    [disabled]="group.alwaysIncluded"
+                    (change)="toggleGroup(group.name, $any($event.target).checked)"
+                    style="flex-shrink: 0"
+                  >
+                  <span style="font-size: 12.5px">{{ group.name }}</span>
+                  @if (group.alwaysIncluded) {
+                    <span class="muted" style="font-size: 10px; margin-left: auto">always</span>
+                  }
+                </label>
+              }
+            </div>
+          </div>
 
         </div>
       }

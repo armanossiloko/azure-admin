@@ -69,7 +69,7 @@ public sealed class ConventionalCommitParser
     public IReadOnlyList<CommitGroupDto> BuildGroups(
         IEnumerable<(ReleaseCommitItemDto Commit, ParsedConventionalCommit Parsed, IReadOnlyList<JiraTicketRefDto> JiraRefs)> items,
         bool useEmojis,
-        bool showOtherGroup)
+        IReadOnlySet<string> excludedGroups)
     {
         var buckets = new Dictionary<string, List<EnrichedCommitItemDto>>(StringComparer.Ordinal);
 
@@ -77,7 +77,7 @@ public sealed class ConventionalCommitParser
         {
             var groupKey = parsed.IsBreaking ? "Breaking Changes" : parsed.GroupName;
 
-            if (!showOtherGroup && groupKey == "Other")
+            if (excludedGroups.Contains(groupKey))
                 continue;
 
             if (!buckets.TryGetValue(groupKey, out var list))

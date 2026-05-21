@@ -3,7 +3,7 @@ namespace AzureAdmin.API.Contracts;
 public sealed record AppSettingsDto(
     bool ConventionalCommitsEnabled,
     bool ConventionalCommitsUseEmojis,
-    bool ConventionalCommitsShowOtherGroup,
+    IReadOnlyList<string> ExcludedGroups,
     bool JiraEnabled,
     string? JiraBaseUrl,
     string? JiraProjectKey);
@@ -11,7 +11,7 @@ public sealed record AppSettingsDto(
 public sealed record UpdateAppSettingsRequest(
     bool ConventionalCommitsEnabled,
     bool ConventionalCommitsUseEmojis,
-    bool ConventionalCommitsShowOtherGroup,
+    IReadOnlyList<string> ExcludedGroups,
     bool JiraEnabled,
     string? JiraBaseUrl,
     string? JiraProjectKey);

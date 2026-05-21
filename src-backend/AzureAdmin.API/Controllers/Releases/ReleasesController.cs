@@ -316,6 +316,6 @@ public sealed class ReleasesController : ControllerBase
             return (Commit: c, Parsed: parsed, JiraRefs: jiraRefs);
         });
 
-        return _commitParser.BuildGroups(items, settings.ConventionalCommitsUseEmojis, settings.ConventionalCommitsShowOtherGroup);
+        return _commitParser.BuildGroups(items, settings.ConventionalCommitsUseEmojis, settings.GetExcludedGroupsSet());
     }
 }

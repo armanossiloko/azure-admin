@@ -5,7 +5,7 @@ import { Observable } from 'rxjs';
 export type AppSettings = {
   conventionalCommitsEnabled: boolean;
   conventionalCommitsUseEmojis: boolean;
-  conventionalCommitsShowOtherGroup: boolean;
+  excludedGroups: string[];
   jiraEnabled: boolean;
   jiraBaseUrl: string | null;
   jiraProjectKey: string | null;
