@@ -1,0 +1,70 @@
+# Azure DevOps pipeline for the Angular SPA (repo root).
+# Create a pipeline in Azure DevOps pointing at this file.
+trigger:
+  batch: true
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - package.json
+      - package-lock.json
+      - angular.json
+      - ngsw-config.json
+      - proxy.conf.json
+      - tsconfig.json
+      - tsconfig.app.json
+      - tsconfig.spec.json
+      - src
+      - public
+      - Dockerfile.frontend
+      - nginx.frontend.conf
+      - .dockerignore.frontend
+      - azure-pipelines-frontend.yml
+    exclude:
+      - src-backend
+
+pr:
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - package.json
+      - package-lock.json
+      - angular.json
+      - ngsw-config.json
+      - proxy.conf.json
+      - tsconfig.json
+      - tsconfig.app.json
+      - tsconfig.spec.json
+      - src
+      - public
+      - Dockerfile.frontend
+      - nginx.frontend.conf
+      - .dockerignore.frontend
+      - azure-pipelines-frontend.yml
+    exclude:
+      - src-backend
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: NodeTool@0
+    displayName: Use Node.js 22
+    inputs:
+      versionSpec: '22.x'
+
+  - script: npm ci
+    displayName: Install dependencies
+
+  - script: npm run build
+    displayName: Production build
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish dist
+    inputs:
+      PathtoPublish: dist/azure-admin/browser
+      ArtifactName: frontend
+      publishLocation: Container

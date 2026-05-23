@@ -1,0 +1,67 @@
+---
+description: Commit message format (Conventional Commits, Beyer Sascha style)
+alwaysApply: true
+---
+
+# Commit messages
+
+Follow the style used by Sascha Beyer on this repo (Conventional Commits).
+
+## Format
+
+Each line is one atomic change:
+
+```text
+<type>(<scope>): <short description in imperative mood>
+```
+
+- **type**: `feat` | `fix` | `refactor` | `chore` | `docs` | `test` | `build` | `ci` (use what fits; prefer `feat` for user-facing behavior, `chore` for tooling/config/deps)
+- **scope**: area touched — e.g. `frontend`, `auth`, `docker`, `env`, `config`, `backend` (lowercase, no spaces)
+- **description**: imperative, lowercase start, no trailing period; name tech when it clarifies (`Keycloak`, `Angular`, `.NET`)
+
+## One commit, multiple lines
+
+When a single commit spans several logical changes, use **one conventional line per change** (blank line optional between groups). Do not write a paragraph body unless the user asks for detail.
+
+Example (from `feature/pwa`):
+
+```text
+feat(frontend): update Angular dependencies and add service worker
+feat(frontend): enhance proxy configuration for authentication
+feat(frontend): implement Keycloak authentication flow
+refactor(auth): simplify login and logout methods
+chore(frontend): add PWA support with manifest and service worker
+chore(docker): create multi-stage Dockerfile for Angular and .NET
+chore(env): add example environment variables for configuration
+```
+
+Small, focused commit (single line is fine):
+
+```text
+chore(config): remove deprecated appsettings.Development.json
+```
+
+## Scope hints (this repo)
+
+| Scope | Use for |
+|-------|---------|
+| `frontend` | Angular SPA, `src/`, `package.json`, PWA, proxy |
+| `auth` | Login/logout/guards/services (front or back) |
+| `backend` | `src-backend/AzureAdmin.API/` |
+| `docker` | `Dockerfile*`, `docker-compose.yml`, nginx |
+| `env` | `.env.example`, environment variable docs |
+| `config` | `appsettings.json`, app configuration files |
+| `ci` | `azure-pipelines-*.yml` |
+
+## Avoid
+
+- Vague subjects: `fix stuff`, `update code`, `WIP`
+- Past tense: `added`, `fixed`, `removed` → use `add`, `fix`, `remove`
+- Title Case subjects or trailing periods
+- Mixing unrelated work in one line — split into additional lines instead
+
+## When drafting for the user
+
+1. Read the diff and list distinct logical changes.
+2. Emit one `type(scope): description` line per change.
+3. Prefer the smallest accurate type/scope; split frontend vs auth vs docker when both change.

@@ -1,0 +1,59 @@
+# Azure DevOps pipeline for the .NET API (src-backend/AzureAdmin.API).
+# Create a pipeline in Azure DevOps pointing at this file.
+trigger:
+  batch: true
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - src-backend
+      - AzureAdmin.slnx
+      - Dockerfile.backend
+      - azure-pipelines-backend.yml
+
+pr:
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - src-backend
+      - AzureAdmin.slnx
+      - Dockerfile.backend
+      - azure-pipelines-backend.yml
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: Release
+  apiProject: src-backend/AzureAdmin.API/AzureAdmin.API.csproj
+
+steps:
+  - task: UseDotNet@2
+    displayName: Use .NET 10 SDK
+    inputs:
+      packageType: sdk
+      version: 10.x
+
+  - task: DotNetCoreCLI@2
+    displayName: Restore
+    inputs:
+      command: restore
+      projects: $(apiProject)
+
+  - task: DotNetCoreCLI@2
+    displayName: Publish
+    inputs:
+      command: publish
+      projects: $(apiProject)
+      arguments: --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/api --no-restore
+      zipAfterPublish: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish api artifact
+    inputs:
+      PathtoPublish: $(Build.ArtifactStagingDirectory)/api
+      ArtifactName: backend
+      publishLocation: Container

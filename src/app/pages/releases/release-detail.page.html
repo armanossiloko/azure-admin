@@ -1,0 +1,429 @@
+<div class="page" *ngIf="release() as rel">
+  <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap">
+    <div class="titles">
+      <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
+        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
+        <span style="color: var(--text-4); font-size: 13px">/</span>
+        <span style="color: var(--text-2); font-size: 13px">Detail</span>
+      </div>
+      <h1 class="page-title">{{ rel.title }}</h1>
+      <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
+        <span class="badge draft">{{ rel.status }}</span>
+        <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
+        <span>· Created {{ rel.createdAt | date: 'medium' }}</span>
+      </div>
+    </div>
+    <div class="actions" style="display: flex; gap: var(--s-2); align-items: flex-start">
+      <a [routerLink]="['/releases', rel.id, 'add-prs']" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Add PRs to this release
+      </a>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (copyMessage()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">{{ copyMessage() }}</div>
+    </div>
+  }
+
+  @if (notesMessage()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12" y2="8"/>
+      </svg>
+      <div class="banner-body">{{ notesMessage() }}</div>
+    </div>
+  }
+
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <h3 class="card-title">Teams in this release</h3>
+    </div>
+    <div class="card-body">
+      @if (!rel.teams.length) {
+        <p class="muted">No teams enrolled yet. Teams are added when someone runs a PR batch.</p>
+      } @else {
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          @for (t of rel.teams; track t.teamId) {
+            <span class="badge">{{ t.teamName }}</span>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Pull requests by phase</h3>
+        <p class="card-subtitle">A release has promotion phases; each phase accumulates PRs from every batch you run for that phase.</p>
+      </div>
+    </div>
+    @if (rel.pullRequests.length) {
+      <div class="card-body" style="display: flex; flex-direction: column; gap: var(--s-5)">
+        @let otherPrs = pullRequestsInPhase(rel.pullRequests, 'other');
+        @for (bucket of prPhaseBuckets; track bucket.key) {
+          @let prs = pullRequestsInPhase(rel.pullRequests, bucket.key);
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
+              <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ bucket.title }}</h4>
+              <span class="badge draft">{{ prs.length }} PR{{ prs.length === 1 ? '' : 's' }}</span>
+            </div>
+            @if (prs.length) {
+              <div class="tbl-wrap" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Team</th>
+                      <th>Repo</th>
+                      <th>Title</th>
+                      <th class="actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let pr of prs">
+                      <td>{{ pr.teamName }}</td>
+                      <td>
+                        <div style="font-weight: 500; font-size: 13px">{{ repoDisplay(pr) }}</div>
+                        <div class="mono muted" style="font-size: 11px">{{ pr.repositoryIdOrName }}</div>
+                      </td>
+                      <td>{{ pr.title }}</td>
+                      <td class="actions">
+                        <a class="btn btn-sm btn-ghost" [href]="pr.url" target="_blank" rel="noopener">
+                          Open in ADO
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                          </svg>
+                        </a>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            } @else {
+              <p class="muted" style="margin: 0">No PRs in this phase yet.</p>
+            }
+          </div>
+        }
+        @if (otherPrs.length) {
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
+              <h4 style="font-size: 14px; font-weight: 600; margin: 0">Other phase values</h4>
+              <span class="badge draft">{{ otherPrs.length }} PRs</span>
+            </div>
+            <div class="tbl-wrap" style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Team</th>
+                    <th>Repo</th>
+                    <th>Phase</th>
+                    <th>Title</th>
+                    <th class="actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let pr of otherPrs">
+                    <td>{{ pr.teamName }}</td>
+                    <td>
+                      <div style="font-weight: 500; font-size: 13px">{{ repoDisplay(pr) }}</div>
+                      <div class="mono muted" style="font-size: 11px">{{ pr.repositoryIdOrName }}</div>
+                    </td>
+                    <td><span class="badge draft">{{ phaseLabel(pr.phase) }}</span></td>
+                    <td>{{ pr.title }}</td>
+                    <td class="actions">
+                      <a class="btn btn-sm btn-ghost" [href]="pr.url" target="_blank" rel="noopener">
+                        Open in ADO
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="card-body">
+        <p class="muted">No PRs recorded for this release yet.</p>
+      </div>
+    }
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Release notes (commits)</h3>
+        <p class="card-subtitle">Commits from linked pull requests (or branch diff). Use Refresh after API changes.</p>
+      </div>
+      <div style="display: flex; gap: var(--s-2); flex-wrap: wrap">
+        <button type="button" class="btn btn-sm btn-ghost" (click)="openPreview()" [disabled]="!(rel.repositoryCommitNotes?.length ?? 0)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          Preview
+        </button>
+        <button type="button" class="btn btn-sm" (click)="copyMarkdown('all')" [disabled]="!(rel.repositoryCommitNotes?.length ?? 0)">
+          Copy all (markdown)
+        </button>
+        <button type="button" class="btn btn-sm" (click)="refreshNotes()" [disabled]="notesBusy()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          {{ notesBusy() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      @if ((rel.repositoryCommitNotes?.length ?? 0) > 0) {
+        <div style="display: flex; flex-direction: column; gap: var(--s-5)">
+          @let otherNoteBlocks = commitNotesInPhase(rel.repositoryCommitNotes, 'other');
+          @for (bucket of prPhaseBuckets; track bucket.key) {
+            @let blocks = commitNotesInPhase(rel.repositoryCommitNotes, bucket.key);
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
+                <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ bucket.title }}</h4>
+                <div style="display: flex; align-items: center; gap: var(--s-2)">
+                  <span class="badge draft">{{ blocks.length }} repo{{ blocks.length === 1 ? '' : 's' }}</span>
+                  @if (blocks.length) {
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="copyMarkdown('phase', bucket.key)">Copy phase</button>
+                  }
+                </div>
+              </div>
+              @if (blocks.length) {
+                <div style="display: flex; flex-direction: column; gap: var(--s-5)">
+                  @for (block of blocks; track commitBlockTrackKey(block)) {
+                    <div>
+                      <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-subtle)">
+                        <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap">
+                          <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h4>
+                          <div class="mono muted" style="font-size: 11px">
+                            {{ block.sourceRefName }} → {{ block.targetRefName }}
+                          </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-ghost" (click)="copyMarkdown('repo', undefined, block)">Copy markdown</button>
+                      </div>
+                      @if (block.fetchedAt) {
+                        <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
+                      }
+                      @if (block.commitGroups?.length) {
+                        <div style="display: flex; flex-direction: column; gap: var(--s-4)">
+                          @for (group of block.commitGroups!; track group.groupName) {
+                            <div>
+                              <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                              <div style="display: flex; flex-direction: column; gap: 4px">
+                                @for (c of group.commits; track c.commitId) {
+                                  <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                                    <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                    <div style="flex: 1; min-width: 0">
+                                      <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                        @if (c.scope) {
+                                          <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                        }
+                                        <span>{{ c.description }}</span>
+                                        @if (c.isBreaking) {
+                                          <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                        }
+                                        @for (jira of c.jiraReferences; track jira.key) {
+                                          <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                        }
+                                      </div>
+                                      <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                    </div>
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      } @else if (hasCommits(block)) {
+                        <div style="display: flex; flex-direction: column; gap: 6px">
+                          @for (c of commitsForBlock(block); track c.commitId) {
+                            <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                              <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                              <div style="flex: 1; min-width: 0">
+                                <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
+                                <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      } @else {
+                        <p class="muted">No commits loaded. Use <strong>Refresh</strong> to pull commits from Azure DevOps (via the linked PR).</p>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="muted" style="margin: 0">No commit notes stored for this phase yet.</p>
+              }
+            </div>
+          }
+          @if (otherNoteBlocks.length) {
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
+                <h4 style="font-size: 14px; font-weight: 600; margin: 0">Other phase values</h4>
+                <span class="badge draft">{{ otherNoteBlocks.length }} repos</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: var(--s-5)">
+                @for (block of otherNoteBlocks; track commitBlockTrackKey(block)) {
+                  <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-subtle)">
+                      <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap">
+                        <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h4>
+                        <span class="badge draft">{{ phaseLabel(block.phase) }}</span>
+                        <div class="mono muted" style="font-size: 11px">
+                          {{ block.sourceRefName }} → {{ block.targetRefName }}
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-ghost" (click)="copyMarkdown('repo', undefined, block)">Copy markdown</button>
+                    </div>
+                    @if (block.fetchedAt) {
+                      <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
+                    }
+                    @if (block.commitGroups?.length) {
+                      <div style="display: flex; flex-direction: column; gap: var(--s-4)">
+                        @for (group of block.commitGroups!; track group.groupName) {
+                          <div>
+                            <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                            <div style="display: flex; flex-direction: column; gap: 4px">
+                              @for (c of group.commits; track c.commitId) {
+                                <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                                  <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                  <div style="flex: 1; min-width: 0">
+                                    <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                      @if (c.scope) {
+                                        <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                      }
+                                      <span>{{ c.description }}</span>
+                                      @if (c.isBreaking) {
+                                        <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                      }
+                                      @for (jira of c.jiraReferences; track jira.key) {
+                                        <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                      }
+                                    </div>
+                                    <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    } @else if (hasCommits(block)) {
+                      <div style="display: flex; flex-direction: column; gap: 6px">
+                        @for (c of commitsForBlock(block); track c.commitId) {
+                          <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
+                            <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                            <div style="flex: 1; min-width: 0">
+                              <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
+                              <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    } @else {
+                      <p class="muted">No commits loaded. Use <strong>Refresh</strong> to pull commits from Azure DevOps (via the linked PR).</p>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="muted">No commit history stored yet. It is filled when PR batches are created; use Refresh to rebuild from Azure DevOps.</p>
+      }
+    </div>
+  </div>
+
+  @if (previewOpen()) {
+    <div style="position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-start; justify-content: flex-end">
+      <div
+        style="position: absolute; inset: 0; background: rgba(0,0,0,0.45)"
+        (click)="closePreview()"
+      ></div>
+      <div style="position: relative; z-index: 1; background: var(--bg-1); border-left: 1px solid var(--border); width: min(720px, 100vw); height: 100vh; display: flex; flex-direction: column; box-shadow: -8px 0 32px rgba(0,0,0,0.18)">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--border); flex-shrink: 0">
+          <div>
+            <div style="font-size: 14px; font-weight: 600">Release notes preview</div>
+            <div class="muted" style="font-size: 11.5px; margin-top: 2px">Rendered output — same content as Copy all (markdown)</div>
+          </div>
+          <button
+            type="button"
+            class="icon-btn"
+            (click)="closePreview()"
+            aria-label="Close preview"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="md-preview" style="flex: 1; overflow-y: auto; padding: var(--s-5) var(--s-6); font-size: 13.5px; line-height: 1.6; color: var(--text-1)" [innerHTML]="previewHtml()"></div>
+      </div>
+    </div>
+  }
+</div>
+
+<div class="page" *ngIf="error() && !release()">
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+  <a routerLink="/releases" class="btn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+      <line x1="19" y1="12" x2="5" y2="12"/>
+      <polyline points="12 19 5 12 12 5"/>
+    </svg>
+    Back to releases
+  </a>
+</div>

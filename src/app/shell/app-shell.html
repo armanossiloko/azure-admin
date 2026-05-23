@@ -1,0 +1,202 @@
+<div class="app" [attr.data-sidebar]="sidebarMode()">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <button class="icon-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+      </button>
+      <div class="brand-mark">AA</div>
+      <div class="brand-name">
+        <div class="n">Azure Admin</div>
+        <div class="s">DevOps release hub</div>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div style="position: relative" #activityPanel>
+        <button type="button" class="icon-btn" (click)="toggleActivityMenu(); $event.stopPropagation()" aria-label="Activity">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </button>
+        <div *ngIf="activityMenuOpen() && navigation() as nav" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 280px; max-height: 320px; overflow-y: auto">
+          <div style="padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Recent</div>
+          <ng-container *ngIf="nav.activityPreview.length; else noActivity">
+            <ng-container *ngFor="let a of nav.activityPreview">
+              <a *ngIf="a.href" class="menu-item" [routerLink]="a.href" (click)="closeActivityMenu()">
+                <div style="flex: 1; min-width: 0">
+                  <div style="font-size: 13px; font-weight: 500">{{ a.title }}</div>
+                  <div *ngIf="a.subtitle" style="font-size: 11px; color: var(--text-3)">{{ a.subtitle }}</div>
+                </div>
+              </a>
+              <div *ngIf="!a.href" class="menu-item" style="opacity: 0.65; cursor: default">
+                <div style="flex: 1; min-width: 0">
+                  <div style="font-size: 13px; font-weight: 500">{{ a.title }}</div>
+                  <div *ngIf="a.subtitle" style="font-size: 11px; color: var(--text-3)">{{ a.subtitle }}</div>
+                </div>
+              </div>
+            </ng-container>
+          </ng-container>
+          <ng-template #noActivity>
+            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No recent activity.</div>
+          </ng-template>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" aria-label="Notifications" style="position: relative" (click)="loadNavigation()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+          <path d="M10 21a2 2 0 0 0 4 0"/>
+        </svg>
+        <span
+          *ngIf="(navigation()?.unreadNotificationsCount ?? 0) > 0"
+          style="position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger)"
+        ></span>
+      </button>
+      <button class="icon-btn" (click)="toggleTheme()" aria-label="Toggle theme">
+        <svg *ngIf="theme.theme() === 'dark'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg *ngIf="theme.theme() === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <div style="width: 1px; height: 18px; background: var(--border); margin: 0 4px"></div>
+      <div style="position: relative" #accountDropdown>
+        <button 
+          class="row gap-2" 
+          (click)="toggleAccountMenu()"
+          style="background: transparent; border: none; padding: 4px 6px; border-radius: 8px; cursor: pointer"
+        >
+          <div class="avatar" *ngIf="auth.user() as u">{{ getInitials(u.displayName || u.email) }}</div>
+          <div *ngIf="auth.user() as u" style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; white-space: nowrap">
+            <span style="font-size: 12.5px; font-weight: 500">{{ u.displayName || u.email }}</span>
+            <span style="font-size: 10.5px; color: var(--text-3)">Admin</span>
+          </div>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div *ngIf="accountMenuOpen()" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 240px">
+          <div *ngIf="auth.user() as u" style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px">
+            <div style="font-size: 13px; font-weight: 500">{{ u.displayName || u.email }}</div>
+            <div style="font-size: 11.5px; color: var(--text-3)">{{ u.email }}</div>
+          </div>
+          <button class="menu-item" (click)="closeAccountMenu(); navigateTo('/settings/azure-organizations')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
+            </svg>
+            Azure organizations
+          </button>
+          <button class="menu-item" (click)="closeAccountMenu()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.36.15.7.34 1 .55"/>
+            </svg>
+            Account settings
+          </button>
+          <div class="menu-sep"></div>
+          <button class="menu-item danger" (click)="logout()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Log out
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Manage</div>
+      <button class="nav-item" routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M3 12L12 3l9 9"/><path d="M5 10v10h14V10"/>
+        </svg>
+        <span>Overview</span>
+      </button>
+      <button class="nav-item" routerLink="/releases" routerLinkActive="active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M4.5 16.5c-1.5 1.5-2 5-2 5s3.5-.5 5-2c.9-.9.9-2.5 0-3.5s-2.6-.9-3 .5z"/>
+          <path d="M12 15l-3-3a22 22 0 0 1 8-13c4 0 7 3 7 7a22 22 0 0 1-13 8z"/>
+          <circle cx="15" cy="9" r="2"/>
+        </svg>
+        <span>Releases</span>
+      </button>
+      <button class="nav-item" routerLink="/teams" routerLinkActive="active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Teams</span>
+      </button>
+      <button class="nav-item" routerLink="/repositories" routerLinkActive="active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        <span>Repositories</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Settings</div>
+      <button class="nav-item" routerLink="/settings" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.36.15.7.34 1 .55"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+      <button class="nav-item" routerLink="/settings/azure-organizations" routerLinkActive="active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
+        </svg>
+        <span>Azure organizations</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div
+        class="org-switcher"
+        #orgSwitcher
+        (click)="onOrgSwitcherClick()"
+        [style.cursor]="(navigation()?.organizations?.length ?? 0) > 1 ? 'pointer' : 'default'"
+      >
+        <ng-container *ngIf="selectedOrganization() as org; else shellNoOrg">
+          <div class="org-mark">{{ getInitials(org.displayName) }}</div>
+          <div class="org-name">{{ org.displayName }}</div>
+          <svg *ngIf="(navigation()?.organizations?.length ?? 0) > 1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="chev">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </ng-container>
+        <ng-template #shellNoOrg>
+          <div class="org-mark">?</div>
+          <a class="org-name" routerLink="/settings/azure-organizations" style="text-decoration: none; color: inherit">Add organization</a>
+        </ng-template>
+        <div *ngIf="orgMenuOpen() && (navigation()?.organizations?.length ?? 0) > 1" class="menu" style="bottom: 100%; left: 0; margin-bottom: 4px; min-width: 220px">
+          <button type="button" class="menu-item" *ngFor="let o of navigation()!.organizations" (click)="selectOrganization(o.id)">
+            <div style="flex: 1; text-align: left">
+              <div style="font-size: 13px">{{ o.displayName }}</div>
+              <div class="muted" style="font-size: 11px">{{ o.hasPatCredential ? 'PAT stored' : 'No PAT' }}</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <router-outlet />
+  </div>
+</div>
