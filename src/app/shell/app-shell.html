@@ -15,6 +15,41 @@
       </div>
     </div>
 
+    <div class="topbar-search" #searchPanel>
+      <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input
+        #searchInput
+        type="search"
+        placeholder="Search releases, teams, repos…"
+        aria-label="Global search"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="onSearchInput($event)"
+        (focus)="searchOpen.set(true)"
+      />
+      <span class="kbd">/</span>
+      <div *ngIf="searchOpen() && searchQuery().trim().length >= 2" class="menu" style="top: 100%; left: 0; right: 0; margin-top: 4px; max-height: 320px; overflow-y: auto">
+        <ng-container *ngIf="searchBusy(); else searchResults">
+          <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">Searching…</div>
+        </ng-container>
+        <ng-template #searchResults>
+          <ng-container *ngIf="searchHits().length; else noSearchHits">
+            <button type="button" class="menu-item" *ngFor="let hit of searchHits()" (click)="openSearchHit(hit)">
+              <div style="flex: 1; min-width: 0; text-align: left">
+                <div style="font-size: 13px; font-weight: 500">{{ hit.title }}</div>
+                <div *ngIf="hit.subtitle" style="font-size: 11px; color: var(--text-3)">{{ hit.subtitle }}</div>
+              </div>
+            </button>
+          </ng-container>
+          <ng-template #noSearchHits>
+            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No results.</div>
+          </ng-template>
+        </ng-template>
+      </div>
+    </div>
+
     <div class="topbar-right">
       <div style="position: relative" #activityPanel>
         <button type="button" class="icon-btn" (click)="toggleActivityMenu(); $event.stopPropagation()" aria-label="Activity">
@@ -45,16 +80,46 @@
           </ng-template>
         </div>
       </div>
-      <button type="button" class="icon-btn" aria-label="Notifications" style="position: relative" (click)="loadNavigation()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-          <path d="M10 21a2 2 0 0 0 4 0"/>
-        </svg>
-        <span
-          *ngIf="(navigation()?.unreadNotificationsCount ?? 0) > 0"
-          style="position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger)"
-        ></span>
-      </button>
+      <div style="position: relative" #notificationsPanel>
+        <button type="button" class="icon-btn" aria-label="Notifications" style="position: relative" (click)="toggleNotificationsMenu(); $event.stopPropagation()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+            <path d="M10 21a2 2 0 0 0 4 0"/>
+          </svg>
+          <span
+            *ngIf="(navigation()?.unreadNotificationsCount ?? 0) > 0"
+            style="position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger)"
+          ></span>
+        </button>
+        <div *ngIf="notificationsMenuOpen()" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 300px; max-height: 360px; overflow-y: auto">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px">
+            <span style="font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Notifications</span>
+            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 2px 6px" (click)="markAllNotificationsRead()">Mark all read</button>
+          </div>
+          <ng-container *ngIf="notificationsLoading(); else notificationList">
+            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">Loading…</div>
+          </ng-container>
+          <ng-template #notificationList>
+            <ng-container *ngIf="notifications().length; else noNotifications">
+              <button
+                type="button"
+                class="menu-item"
+                *ngFor="let n of notifications()"
+                (click)="openNotification(n)"
+                [style.opacity]="n.isRead ? '0.7' : '1'"
+              >
+                <div style="flex: 1; min-width: 0; text-align: left">
+                  <div style="font-size: 13px; font-weight: 500">{{ n.title }}</div>
+                  <div *ngIf="n.body" style="font-size: 11px; color: var(--text-3); margin-top: 2px">{{ n.body }}</div>
+                </div>
+              </button>
+            </ng-container>
+            <ng-template #noNotifications>
+              <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No notifications.</div>
+            </ng-template>
+          </ng-template>
+        </div>
+      </div>
       <button class="icon-btn" (click)="toggleTheme()" aria-label="Toggle theme">
         <svg *ngIf="theme.theme() === 'dark'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
           <circle cx="12" cy="12" r="4"/>
@@ -91,7 +156,7 @@
             </svg>
             Azure organizations
           </button>
-          <button class="menu-item" (click)="closeAccountMenu()">
+          <button class="menu-item" (click)="closeAccountMenu(); navigateTo('/settings/account')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.36.15.7.34 1 .55"/>

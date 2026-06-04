@@ -2,6 +2,7 @@ using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
+using AzureAdmin.API.Services.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,15 +17,18 @@ public sealed class NavigationController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly AzureDevOpsOrganizationService _organizations;
     private readonly ICurrentUser _currentUser;
+    private readonly NotificationService _notifications;
 
     public NavigationController(
         ApplicationDbContext db,
         AzureDevOpsOrganizationService organizations,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        NotificationService notifications)
     {
         _db = db;
         _organizations = organizations;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     [HttpGet]
@@ -40,8 +44,8 @@ public sealed class NavigationController : ControllerBase
 
         var activityPreview = await BuildActivityPreviewAsync(since, userId, cancellationToken);
 
-        // Reserved for future in-app notifications; always zero until a notifications store exists.
-        const int unreadNotificationsCount = 0;
+        await _notifications.SyncPatExpiryNotificationsAsync(cancellationToken);
+        var unreadNotificationsCount = await _notifications.GetUnreadCountAsync(cancellationToken);
 
         return Ok(new NavigationSummaryDto(organizations, activityPreview, unreadNotificationsCount));
     }

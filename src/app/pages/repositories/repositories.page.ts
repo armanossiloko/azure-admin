@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, effect, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { SelectedOrgService } from '../../services/selected-org.service';
 
 type Team = { id: string; name: string };
 
@@ -36,6 +37,7 @@ type CatalogRepo = { id: string; name: string; projectName: string };
   templateUrl: './repositories.page.html'
 })
 export class RepositoriesPage implements OnInit {
+  private readonly selectedOrg = inject(SelectedOrgService);
   protected readonly teams = signal<Team[]>([]);
   protected readonly adoOrgs = signal<AdoOrgSummary[]>([]);
   protected readonly rows = signal<RegisteredRepository[]>([]);
@@ -58,10 +60,18 @@ export class RepositoriesPage implements OnInit {
   protected readonly importSelectedRepoIds = signal<ReadonlySet<string>>(new Set());
   protected readonly importCatalogBusy = signal(false);
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {
+    effect(() => {
+      const id = this.selectedOrg.selectedOrgId();
+      if (id) this.importOrgId.set(id);
+      void this.refresh();
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await Promise.all([this.loadTeams(), this.loadAdoOrgs()]);
+    const orgId = this.selectedOrg.selectedOrgId();
+    if (orgId) this.importOrgId.set(orgId);
     await this.refresh();
   }
 
@@ -86,8 +96,16 @@ export class RepositoriesPage implements OnInit {
   protected async refresh(): Promise<void> {
     this.error.set(null);
     const tid = this.filterTeamId().trim();
+    const orgQ = this.selectedOrg.organizationQueryParam();
     try {
-      const url = tid ? `/api/registered-repositories?teamId=${encodeURIComponent(tid)}` : '/api/registered-repositories';
+      const params = new URLSearchParams();
+      if (tid) params.set('teamId', tid);
+      if (orgQ) {
+        const orgId = this.selectedOrg.selectedOrgId();
+        if (orgId) params.set('organizationId', orgId);
+      }
+      const qs = params.toString();
+      const url = qs ? `/api/registered-repositories?${qs}` : '/api/registered-repositories';
       const list = await firstValueFrom(this.http.get<RegisteredRepository[]>(url));
       this.rows.set(list ?? []);
     } catch {

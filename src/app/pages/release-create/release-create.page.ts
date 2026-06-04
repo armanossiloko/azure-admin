@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, OnInit, signal } from '@angular/core';
+import { SelectedOrgService } from '../../services/selected-org.service';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -90,6 +91,8 @@ export class ReleaseCreatePage implements OnInit {
     this.toBranch.set('');
   }
 
+  private readonly selectedOrg = inject(SelectedOrgService);
+
   constructor(
     private readonly http: HttpClient,
     private readonly route: ActivatedRoute
@@ -162,10 +165,11 @@ export class ReleaseCreatePage implements OnInit {
     if (this.reposByTeam().has(teamId)) return;
     this.reposByTeam.update(m => new Map(m).set(teamId, []));
     try {
+      const params: Record<string, string> = { teamId };
+      const orgId = this.selectedOrg.selectedOrgId();
+      if (orgId) params['organizationId'] = orgId;
       const rows = await firstValueFrom(
-        this.http.get<RegisteredRepository[]>('/api/registered-repositories', {
-          params: { teamId }
-        })
+        this.http.get<RegisteredRepository[]>('/api/registered-repositories', { params })
       );
       this.reposByTeam.update(m => new Map(m).set(teamId, rows ?? []));
     } catch {

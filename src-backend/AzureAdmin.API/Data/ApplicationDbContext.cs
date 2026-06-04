@@ -24,6 +24,8 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
     public DbSet<AzureDevOpsPatCredential> AzureDevOpsPatCredentials => Set<AzureDevOpsPatCredential>();
     public DbSet<UserAzureDevOpsOrganization> UserAzureDevOpsOrganizations => Set<UserAzureDevOpsOrganization>();
     public DbSet<AppSettings> AppSettings => Set<AppSettings>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -151,6 +153,31 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.HasKey(x => x.Id);
             e.Property(x => x.JiraBaseUrl).HasMaxLength(512);
             e.Property(x => x.JiraProjectKey).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<UserNotification>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.DedupeKey).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Kind).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Body).HasMaxLength(2000);
+            e.Property(x => x.Href).HasMaxLength(512);
+            e.HasIndex(x => new { x.UserId, x.DedupeKey }).IsUnique();
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserPreferences>(e =>
+        {
+            e.HasKey(x => x.UserId);
+            e.Property(x => x.PreferredTheme).HasMaxLength(16);
+            e.HasOne(x => x.User)
+                .WithOne()
+                .HasForeignKey<UserPreferences>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

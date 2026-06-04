@@ -1,0 +1,66 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Account settings</h1>
+      <p class="page-sub">Profile and preferences for your signed-in account.</p>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else {
+    @if (error()) {
+      <div class="alert danger">{{ error() }}</div>
+    }
+    @if (info()) {
+      <div class="alert success">{{ info() }}</div>
+    }
+
+    <div class="card" style="margin-bottom: var(--s-4)">
+      <h3 class="card-title">Profile</h3>
+      @if (auth.user(); as u) {
+        <dl class="kv-list">
+          <div><dt>Name</dt><dd>{{ u.displayName || '—' }}</dd></div>
+          <div><dt>Email</dt><dd>{{ u.email }}</dd></div>
+        </dl>
+        <p class="field-hint">Profile details are managed in Keycloak.</p>
+      }
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Preferences</h3>
+      <div class="field">
+        <label for="default-org">Default Azure organization</label>
+        <select id="default-org" class="select" [ngModel]="defaultOrganizationId()" (ngModelChange)="defaultOrganizationId.set($event)">
+          <option value="">— None —</option>
+          @for (o of organizations(); track o.id) {
+            <option [value]="o.id">{{ o.displayName }}</option>
+          }
+        </select>
+        <div class="field-hint">Used when you open the app and for the sidebar organization switcher.</div>
+      </div>
+
+      <div class="field">
+        <label for="theme">Theme</label>
+        <select id="theme" class="select" [ngModel]="preferredTheme()" (ngModelChange)="preferredTheme.set($event)">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="row gap-2" style="align-items: center; cursor: pointer">
+          <input type="checkbox" [ngModel]="notifyPatExpiry()" (ngModelChange)="notifyPatExpiry.set($event)" />
+          <span>PAT expiry reminders (in-app notifications)</span>
+        </label>
+        <div class="field-hint">Notify when a stored PAT is expiring within 14 days or has expired.</div>
+      </div>
+
+      <div class="row gap-2" style="margin-top: var(--s-4)">
+        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save preferences' }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

@@ -1,6 +1,7 @@
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
+using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
 
 namespace AzureAdmin.API.DependencyInjection;
@@ -21,6 +22,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<AzureDevOpsCatalogService>();
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();
+        services.AddScoped<NotificationService>();
         services.AddSingleton<ConventionalCommitParser>();
         services.AddSingleton<JiraReferenceExtractor>();
 
