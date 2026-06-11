@@ -1,5 +1,6 @@
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Services.AzureDevOps;
+using AzureAdmin.API.Services.Git;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
@@ -20,6 +21,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IAzureDevOpsPatResolver, AzureDevOpsPatResolver>();
         services.AddScoped<AzureDevOpsClient>();
         services.AddScoped<AzureDevOpsCatalogService>();
+        services.AddScoped<StaleBranchService>();
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();
         services.AddScoped<NotificationService>();

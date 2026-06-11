@@ -1,0 +1,208 @@
+<div class="page page-narrow">
+  <div class="page-header">
+    <div class="titles">
+      <h1 class="page-title">Stale branches</h1>
+      <p class="page-subtitle">Browse old branches across registered repositories and delete them safely. Deletions are logged in the database.</p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="refresh()" [disabled]="busy()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Scan branches
+    </button>
+  </div>
+
+  @if (error()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ error() }}</div>
+    </div>
+  }
+
+  @if (info()) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="banner-icon">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="13"/>
+        <line x1="12" y1="16" x2="12" y2="16"/>
+      </svg>
+      <div class="banner-body">{{ info() }}</div>
+    </div>
+  }
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <line x1="4" y1="21" x2="4" y2="14"/>
+        <line x1="4" y1="10" x2="4" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12" y2="3"/>
+        <line x1="20" y1="21" x2="20" y2="16"/>
+        <line x1="20" y1="12" x2="20" y2="3"/>
+        <line x1="1" y1="14" x2="7" y2="14"/>
+        <line x1="9" y1="8" x2="15" y2="8"/>
+        <line x1="17" y1="16" x2="23" y2="16"/>
+      </svg>
+      <h3 class="card-title">Filters</h3>
+    </div>
+    <div class="card-body">
+      <div style="display: grid; grid-template-columns: 1fr 140px 160px; gap: var(--s-4); align-items: end">
+        <div class="field">
+          <label class="field-label" for="filter-repo">Repository</label>
+          <select id="filter-repo" class="select" [ngModel]="filterRepoId()" (ngModelChange)="filterRepoId.set($event)">
+            <option value="">All registered repositories</option>
+            @for (r of repos(); track r.id) {
+              <option [value]="r.id">{{ r.serviceName || r.repositoryIdOrName }} ({{ r.azureDevOpsProject }})</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="stale-days">Stale after (days)</label>
+          <input id="stale-days" class="input" type="number" min="1" max="3650" [ngModel]="staleDays()" (ngModelChange)="staleDays.set(+$event || 90)" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="stale-only">Show</label>
+          <select id="stale-only" class="select" [ngModel]="staleOnly() ? 'stale' : 'all'" (ngModelChange)="staleOnly.set($event === 'stale')">
+            <option value="stale">Stale only</option>
+            <option value="all">All branches</option>
+          </select>
+        </div>
+      </div>
+      <p class="muted" style="margin-top: var(--s-4); font-size: 12px; margin-bottom: 0">
+        Protected branches (main, master, dev, develop, prod, staging, release) are never listed for deletion.
+      </p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--s-6)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <line x1="6" y1="3" x2="6" y2="15"/>
+        <circle cx="18" cy="6" r="3"/>
+        <circle cx="6" cy="18" r="3"/>
+        <path d="M18 9a9 9 0 0 1-9 9"/>
+      </svg>
+      <h3 class="card-title">Branches</h3>
+      @if (branches().length) {
+        <span class="badge" style="margin-left: var(--s-2)">{{ branches().length }}</span>
+      }
+    </div>
+    @if (busy() && !branches().length) {
+      <div class="card-body">
+        <p class="muted">Scanning repositories…</p>
+      </div>
+    } @else if (branches().length) {
+      <div class="card-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Branch</th>
+                <th>Repository</th>
+                <th>Last commit</th>
+                <th>Age (days)</th>
+                <th class="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (b of branches(); track b.registeredRepositoryId + b.refName) {
+                <tr>
+                  <td class="mono">{{ b.branchName }}</td>
+                  <td>
+                    <div style="font-size: 13px">{{ repoLabel(b) }}</div>
+                    <div class="muted" style="font-size: 11px">{{ b.azureDevOpsOrganization }} / {{ b.azureDevOpsProject }}</div>
+                  </td>
+                  <td>{{ formatDate(b.lastCommitDate) }}</td>
+                  <td>
+                    @if (b.daysSinceLastCommit !== null) {
+                      <span [class]="b.isStale ? 'badge warn' : 'badge'">{{ b.daysSinceLastCommit }}</span>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                  <td class="actions">
+                    @if (!b.isProtected) {
+                      <button type="button" class="btn btn-sm btn-danger" (click)="deleteBranch(b)" [disabled]="busy()">Delete</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card-body">
+        <div class="empty">
+          <div class="glyph">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <line x1="6" y1="3" x2="6" y2="15"/>
+              <circle cx="18" cy="6" r="3"/>
+              <circle cx="6" cy="18" r="3"/>
+              <path d="M18 9a9 9 0 0 1-9 9"/>
+            </svg>
+          </div>
+          <h3>No branches to show</h3>
+          <p>Click “Scan branches” to load branches from your registered repositories.</p>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <h3 class="card-title">Deletion log</h3>
+      <button type="button" class="btn btn-sm" style="margin-left: auto" (click)="loadActionLog()" [disabled]="logBusy()">Refresh</button>
+    </div>
+    @if (logBusy() && !actionLog().length) {
+      <div class="card-body"><p class="muted">Loading log…</p></div>
+    } @else if (actionLog().length) {
+      <div class="card-body flush">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>User</th>
+                <th>Target</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of actionLog(); track entry.id) {
+                <tr>
+                  <td class="muted" style="font-size: 12px; white-space: nowrap">{{ formatLogDate(entry.createdAt) }}</td>
+                  <td>{{ entry.userDisplayName || entry.userId }}</td>
+                  <td class="mono" style="font-size: 12px">{{ entry.targetKey }}</td>
+                  <td>
+                    @if (entry.success) {
+                      <span class="badge ok">Deleted</span>
+                    } @else {
+                      <span class="badge danger" [title]="entry.errorMessage || ''">Failed</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card-body">
+        <p class="muted">No branch deletions logged yet.</p>
+      </div>
+    }
+  </div>
+</div>

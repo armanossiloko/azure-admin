@@ -26,6 +26,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
     public DbSet<AppSettings> AppSettings => Set<AppSettings>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
+    public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -178,6 +179,21 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
                 .WithOne()
                 .HasForeignKey<UserPreferences>(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdminActionLog>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Action).HasMaxLength(64).IsRequired();
+            e.Property(x => x.TargetType).HasMaxLength(64).IsRequired();
+            e.Property(x => x.TargetKey).HasMaxLength(1024).IsRequired();
+            e.Property(x => x.ErrorMessage).HasMaxLength(2000);
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.Action);
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

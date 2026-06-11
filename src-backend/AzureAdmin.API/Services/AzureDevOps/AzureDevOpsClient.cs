@@ -214,6 +214,152 @@ public sealed class AzureDevOpsClient
         return new AuthenticationHeaderValue("Basic", token);
     }
 
+    public async Task<IReadOnlyList<AzureDevOpsGitRef>> ListBranchRefsAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+        var results = new List<AzureDevOpsGitRef>();
+        string? continuationToken = null;
+
+        do
+        {
+            var qs =
+                $"filter=heads/" +
+                $"&api-version={Uri.EscapeDataString(_options.ApiVersion)}" +
+                (continuationToken is null ? "" : $"&continuationToken={Uri.EscapeDataString(continuationToken)}");
+
+            var url =
+                $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/refs?{qs}";
+
+            var http = _httpClientFactory.CreateClient();
+            http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
+
+            using var resp = await http.GetAsync(url, ct);
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException($"Azure DevOps list refs failed ({(int)resp.StatusCode}): {text}");
+
+            using var doc = JsonDocument.Parse(text);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("value", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    var name = item.TryGetProperty("name", out var nameEl) && nameEl.ValueKind == JsonValueKind.String
+                        ? nameEl.GetString() ?? ""
+                        : "";
+                    var objectId = item.TryGetProperty("objectId", out var oidEl) && oidEl.ValueKind == JsonValueKind.String
+                        ? oidEl.GetString() ?? ""
+                        : "";
+                    if (name.Length > 0 && objectId.Length > 0)
+                        results.Add(new AzureDevOpsGitRef(name, objectId));
+                }
+            }
+
+            continuationToken = root.TryGetProperty("continuationToken", out var ctEl) && ctEl.ValueKind == JsonValueKind.String
+                ? ctEl.GetString()
+                : null;
+        }
+        while (!string.IsNullOrEmpty(continuationToken));
+
+        return results;
+    }
+
+    public async Task<DateTimeOffset?> TryGetCommitDateAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        string commitId,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+
+        var url =
+            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/commits/{Uri.EscapeDataString(commitId)}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+
+        var http = _httpClientFactory.CreateClient();
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
+
+        using var resp = await http.GetAsync(url, ct);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            return null;
+
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Azure DevOps get commit failed ({(int)resp.StatusCode}): {text}");
+
+        using var doc = JsonDocument.Parse(text);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("committer", out var committer) &&
+            committer.TryGetProperty("date", out var dateEl) &&
+            dateEl.ValueKind == JsonValueKind.String &&
+            DateTimeOffset.TryParse(dateEl.GetString(), out var dto))
+            return dto;
+
+        if (root.TryGetProperty("author", out var author) &&
+            author.TryGetProperty("date", out var authorDateEl) &&
+            authorDateEl.ValueKind == JsonValueKind.String &&
+            DateTimeOffset.TryParse(authorDateEl.GetString(), out var authorDto))
+            return authorDto;
+
+        return null;
+    }
+
+    public async Task DeleteBranchRefAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        string refName,
+        string oldObjectId,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+        refName = NormalizeRefName(refName);
+
+        var url =
+            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/refs?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+
+        var body = new[]
+        {
+            new
+            {
+                name = refName,
+                oldObjectId,
+                newObjectId = "0000000000000000000000000000000000000000"
+            }
+        };
+
+        var http = _httpClientFactory.CreateClient();
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
+
+        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        using var resp = await http.PostAsync(url, content, ct);
+        var respText = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Azure DevOps delete branch failed ({(int)resp.StatusCode}): {respText}");
+    }
+
+    public static string BranchShortName(string refName)
+    {
+        refName = refName.Trim();
+        const string prefix = "refs/heads/";
+        if (refName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return refName[prefix.Length..];
+        if (refName.StartsWith("heads/", StringComparison.OrdinalIgnoreCase))
+            return refName["heads/".Length..];
+        return refName;
+    }
+
     private static string NormalizeRefName(string refName)
     {
         refName = refName.Trim();
@@ -236,3 +382,5 @@ public sealed record AzureDevOpsCreatePullRequestResponse
 }
 
 public sealed record AzureDevOpsCommitBrief(string CommitId, string Comment, string AuthorName, DateTimeOffset CommittedDate);
+
+public sealed record AzureDevOpsGitRef(string Name, string ObjectId);
