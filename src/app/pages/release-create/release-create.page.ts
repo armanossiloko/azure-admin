@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { SelectedOrgService } from '../../services/selected-org.service';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -70,6 +70,8 @@ export class ReleaseCreatePage implements OnInit {
   /** Set when release status does not allow more batches. */
   protected readonly releaseBlocked = signal<string | null>(null);
   protected readonly pageLoadError = signal<string | null>(null);
+  protected readonly reposLoadError = signal<string | null>(null);
+  protected readonly reposLoading = signal(false);
 
   protected readonly prTitle = computed(() => {
     const s = this.sprintLabel().trim();
@@ -91,12 +93,20 @@ export class ReleaseCreatePage implements OnInit {
     this.toBranch.set('');
   }
 
-  private readonly selectedOrg = inject(SelectedOrgService);
+  protected readonly selectedOrg = inject(SelectedOrgService);
 
   constructor(
     private readonly http: HttpClient,
     private readonly route: ActivatedRoute
-  ) {}
+  ) {
+    effect(() => {
+      this.selectedOrg.selectedOrgId();
+      this.reposByTeam.set(new Map());
+      this.selectedRepoIdsByTeam.set(new Map());
+      this.reposLoadError.set(null);
+      void this.reloadReposForIncludedTeams();
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await this.loadTeams();
@@ -161,8 +171,17 @@ export class ReleaseCreatePage implements OnInit {
     return this.reposByTeam().get(teamId) ?? [];
   }
 
-  protected async ensureReposLoaded(teamId: string): Promise<void> {
-    if (this.reposByTeam().has(teamId)) return;
+  private async reloadReposForIncludedTeams(): Promise<void> {
+    for (const teamId of this.includedTeamIds()) {
+      await this.ensureReposLoaded(teamId, true);
+    }
+  }
+
+  protected async ensureReposLoaded(teamId: string, force = false): Promise<void> {
+    if (!force && this.reposByTeam().has(teamId)) return;
+
+    this.reposLoading.set(true);
+    this.reposLoadError.set(null);
     this.reposByTeam.update(m => new Map(m).set(teamId, []));
     try {
       const params: Record<string, string> = { teamId };
@@ -172,8 +191,11 @@ export class ReleaseCreatePage implements OnInit {
         this.http.get<RegisteredRepository[]>('/api/registered-repositories', { params })
       );
       this.reposByTeam.update(m => new Map(m).set(teamId, rows ?? []));
-    } catch {
+    } catch (e: unknown) {
       this.reposByTeam.update(m => new Map(m).set(teamId, []));
+      this.reposLoadError.set(this.prettyError(e));
+    } finally {
+      this.reposLoading.set(false);
     }
   }
 

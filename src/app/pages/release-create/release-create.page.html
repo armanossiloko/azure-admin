@@ -5,6 +5,15 @@
     </div>
   }
 
+  @if (reposLoadError()) {
+    <div class="banner danger" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">
+        <strong>Could not load repositories</strong>
+        <div style="margin-top: 2px; font-size: 12.5px">{{ reposLoadError() }}</div>
+      </div>
+    </div>
+  }
+
   @if (releaseBlocked()) {
     <div class="banner danger" style="margin-bottom: var(--s-5)">
       <div class="banner-body">{{ releaseBlocked() }}</div>
@@ -162,7 +171,14 @@
                         </svg>
                       </div>
                       <h3>No repos registered</h3>
-                      <p>No repos registered for this team. <a routerLink="/repositories">Register repositories</a>.</p>
+                      <p>
+                        @if (selectedOrg.selectedOrgId()) {
+                          No repos registered for this team in the selected Azure DevOps organization. Switch organization in the sidebar or
+                          <a routerLink="/repositories">register repositories</a>.
+                        } @else {
+                          No repos registered for this team. <a routerLink="/repositories">Register repositories</a>.
+                        }
+                      </p>
                     </div>
                   }
                 </div>

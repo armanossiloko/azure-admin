@@ -114,7 +114,7 @@ public sealed class AzureDevOpsCatalogService
         if (org is null)
             throw new ArgumentException("Organization was not found.", nameof(userOrganizationId));
 
-        return (org.OrganizationDisplay, userId);
+        return (org.OrganizationKey, userId);
     }
 
     private static AuthenticationHeaderValue PatAuth(string pat)
