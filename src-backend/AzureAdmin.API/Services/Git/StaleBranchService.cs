@@ -252,9 +252,11 @@ public sealed class StaleBranchService
 
             var display = org.OrganizationDisplay;
             var key = org.OrganizationKey;
+            // NormalizeKey is not translatable by EF Core; ToLower() is, and org slugs
+            // are validated ASCII and trimmed on insert, so it is equivalent here.
             query = query.Where(r =>
                 r.AzureDevOpsOrganization == display ||
-                AzureDevOpsOrganizationService.NormalizeKey(r.AzureDevOpsOrganization) == key);
+                r.AzureDevOpsOrganization.ToLower() == key);
         }
 
         return await query

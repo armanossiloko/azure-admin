@@ -160,8 +160,8 @@ export class BranchesPage implements OnInit {
           }
         })
       );
-      this.info.set(`Deleted branch “${row.branchName}”.`);
       await Promise.all([this.refresh(), this.loadActionLog()]);
+      this.info.set(`Deleted branch “${row.branchName}”.`);
     } catch (e: unknown) {
       this.error.set(this.fmtErr(e));
     } finally {

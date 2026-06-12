@@ -261,8 +261,9 @@ public sealed class AzureDevOpsClient
                 }
             }
 
-            continuationToken = root.TryGetProperty("continuationToken", out var ctEl) && ctEl.ValueKind == JsonValueKind.String
-                ? ctEl.GetString()
+            // Azure DevOps returns the continuation token in a response header, not the JSON body.
+            continuationToken = resp.Headers.TryGetValues("x-ms-continuationtoken", out var ctValues)
+                ? ctValues.FirstOrDefault()
                 : null;
         }
         while (!string.IsNullOrEmpty(continuationToken));

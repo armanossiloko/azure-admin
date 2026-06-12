@@ -1,7 +1,6 @@
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
-using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -43,9 +42,11 @@ public sealed class RegisteredRepositoriesController : ControllerBase
 
             var display = org.OrganizationDisplay;
             var key = org.OrganizationKey;
+            // NormalizeKey is not translatable by EF Core; ToLower() is, and org slugs
+            // are validated ASCII and trimmed on insert, so it is equivalent here.
             query = query.Where(r =>
                 r.AzureDevOpsOrganization == display ||
-                AzureDevOpsOrganizationService.NormalizeKey(r.AzureDevOpsOrganization) == key);
+                r.AzureDevOpsOrganization.ToLower() == key);
         }
 
         var rows = await query

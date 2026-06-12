@@ -58,7 +58,8 @@ public sealed class AuthController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(raw)) return "/";
         var url = raw.Trim();
-        return url.StartsWith('/') && !url.StartsWith("//") ? url : "/";
+        // Reject "//host" and "/\host" — browsers treat both as protocol-relative URLs.
+        return url.StartsWith('/') && !url.StartsWith("//") && !url.StartsWith("/\\") ? url : "/";
     }
 }
 
