@@ -1,0 +1,19 @@
+# .NET build output — Windows-specific NuGet caches (obj/) break Linux container builds
+**/bin/
+**/obj/
+
+# Frontend
+src/**/node_modules/
+src/**/dist/
+frontend/**/node_modules/
+frontend/**/dist/
+
+# IDE and OS
+**/.vs/
+**/.idea/
+**/*.user
+**/.DS_Store
+
+# Git
+.git/
+.gitignore
