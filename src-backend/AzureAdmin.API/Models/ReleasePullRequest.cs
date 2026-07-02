@@ -11,6 +11,7 @@ public sealed class ReleasePullRequest
     public RegisteredRepository RegisteredRepository { get; set; } = null!;
 
     public ReleasePrPhase Phase { get; set; }
+    public ReleasePullRequestStatus Status { get; set; } = ReleasePullRequestStatus.Active;
     public int AzureDevOpsPullRequestId { get; set; }
     public string Url { get; set; } = "";
     public string SourceRefName { get; set; } = "";

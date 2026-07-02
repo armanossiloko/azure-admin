@@ -130,6 +130,7 @@ public sealed class ReleasesController : ControllerBase
                 pr.RegisteredRepository.ServiceName,
                 pr.RegisteredRepository.RepositoryIdOrName,
                 pr.Phase,
+                pr.Status,
                 pr.AzureDevOpsPullRequestId,
                 pr.Url,
                 pr.SourceRefName,
@@ -248,6 +249,19 @@ public sealed class ReleasesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [HttpPost("{releaseId:guid}/pull-requests/status-refresh")]
+    public async Task<ActionResult<RefreshPullRequestStatusesResponse>> RefreshPullRequestStatuses(
+        Guid releaseId,
+        [FromBody] RefreshPullRequestStatusesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await _db.Releases.AnyAsync(r => r.Id == releaseId, cancellationToken))
+            return NotFound();
+
+        var results = await _batchService.RefreshPullRequestStatusesAsync(releaseId, request.Phase, cancellationToken);
+        return Ok(new RefreshPullRequestStatusesResponse(results));
     }
 
     [HttpPost("{releaseId:guid}/commit-notes/refresh")]

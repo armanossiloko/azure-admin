@@ -31,6 +31,7 @@ public sealed record ReleasePullRequestDto(
     string? ServiceName,
     string RepositoryIdOrName,
     ReleasePrPhase Phase,
+    ReleasePullRequestStatus Status,
     int AzureDevOpsPullRequestId,
     string Url,
     string SourceRefName,
@@ -63,6 +64,12 @@ public sealed record CompletedPullRequestResult(
     int PullRequestId,
     bool Success,
     string? Message);
+
+public sealed record RefreshPullRequestStatusesRequest(ReleasePrPhase? Phase);
+
+public sealed record RefreshPullRequestStatusesResponse(IReadOnlyList<ReleasePullRequestStatusResult> Results);
+
+public sealed record ReleasePullRequestStatusResult(Guid PullRequestId, ReleasePullRequestStatus Status);
 
 public sealed record ReleaseCommitItemDto(string CommitId, string Comment, string AuthorName, DateTimeOffset CommittedDate);
 

@@ -34,10 +34,18 @@ public sealed class DashboardController : ControllerBase
             .CountAsync(r => activeReleaseStatuses.Contains(r.Status), cancellationToken);
 
         var openPullRequestsCount = await _db.ReleasePullRequests.AsNoTracking()
-            .CountAsync(pr => activeReleaseStatuses.Contains(pr.Release.Status), cancellationToken);
+            .CountAsync(pr =>
+                activeReleaseStatuses.Contains(pr.Release.Status) &&
+                pr.Status != ReleasePullRequestStatus.Completed &&
+                pr.Status != ReleasePullRequestStatus.Abandoned,
+                cancellationToken);
 
         var pullRequestsNeedingAttentionCount = await _db.ReleasePullRequests.AsNoTracking()
-            .CountAsync(pr => pr.Release.Status == ReleaseLifecycleStatus.Draft, cancellationToken);
+            .CountAsync(pr =>
+                pr.Release.Status == ReleaseLifecycleStatus.Draft &&
+                pr.Status != ReleasePullRequestStatus.Completed &&
+                pr.Status != ReleasePullRequestStatus.Abandoned,
+                cancellationToken);
 
         var registeredRepositoriesCount = await _db.RegisteredRepositories.AsNoTracking()
             .CountAsync(cancellationToken);

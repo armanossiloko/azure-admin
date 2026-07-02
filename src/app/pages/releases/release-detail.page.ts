@@ -15,6 +15,7 @@ type ReleasePullRequest = {
   serviceName: string | null;
   repositoryIdOrName: string;
   phase: string | number;
+  status: string;
   azureDevOpsPullRequestId: number;
   url: string;
   sourceRefName: string;
@@ -32,6 +33,12 @@ type CompletedPullRequestResult = {
 
 type CompleteBatchResponse = {
   results: CompletedPullRequestResult[];
+};
+
+type PullRequestStatusResult = { pullRequestId: string; status: string };
+
+type StatusRefreshResponse = {
+  results: PullRequestStatusResult[];
 };
 
 type ReleaseCommitItem = {
@@ -115,6 +122,7 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly notesMessage = signal<string | null>(null);
   protected readonly copyMessage = signal<string | null>(null);
   protected readonly completingPhase = signal<'dev' | 'prod' | null>(null);
+  protected readonly checkingStatusPhase = signal<'dev' | 'prod' | null>(null);
   protected readonly closingRelease = signal(false);
   protected readonly collapsedPhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set());
   protected readonly collapsedNotePhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set(['dev', 'prod']));
@@ -220,6 +228,40 @@ export class ReleaseDetailPage implements OnInit {
       this.error.set(this.prettyError(e));
     } finally {
       this.closingRelease.set(false);
+    }
+  }
+
+  protected prStatusBadgeClass(status: string): string {
+    switch (status) {
+      case 'Completed':
+        return 'badge ok';
+      case 'Active':
+        return 'badge active';
+      case 'Abandoned':
+        return 'badge danger';
+      default:
+        return 'badge draft';
+    }
+  }
+
+  protected async checkPrStatuses(phaseKey: 'dev' | 'prod'): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+
+    this.checkingStatusPhase.set(phaseKey);
+    this.error.set(null);
+    this.copyMessage.set(null);
+    try {
+      const phase = phaseKey === 'prod' ? 'MasterToProd' : 'DevToMaster';
+      await firstValueFrom(
+        this.http.post<StatusRefreshResponse>(`/api/releases/${rel.id}/pull-requests/status-refresh`, { phase })
+      );
+      await this.loadRelease(rel.id);
+      this.copyMessage.set('PR statuses updated from Azure DevOps.');
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.checkingStatusPhase.set(null);
     }
   }
 
@@ -336,6 +378,8 @@ export class ReleaseDetailPage implements OnInit {
       const results = resp?.results ?? [];
       const failed = results.filter((r) => !r.success);
       const succeeded = results.filter((r) => r.success);
+
+      await this.loadRelease(rel.id);
 
       if (failed.length) {
         const detail = failed.map((f) => `${f.repositoryIdOrName}: ${f.message ?? 'failed'}`).join(' · ');

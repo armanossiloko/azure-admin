@@ -172,15 +172,20 @@ public sealed class ReleasePullRequestBatchService
                     continue;
                 }
 
-                if (snapshot.Status.Equals("completed", StringComparison.OrdinalIgnoreCase))
+                // Keep the locally stored status in sync with Azure DevOps regardless of outcome below.
+                pr.Status = MapPullRequestStatus(snapshot.Status);
+
+                if (pr.Status == ReleasePullRequestStatus.Completed)
                 {
+                    await _db.SaveChangesAsync(cancellationToken);
                     results.Add(new CompletedPullRequestResult(
                         repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, "Already completed."));
                     continue;
                 }
 
-                if (snapshot.Status.Equals("abandoned", StringComparison.OrdinalIgnoreCase))
+                if (pr.Status == ReleasePullRequestStatus.Abandoned)
                 {
+                    await _db.SaveChangesAsync(cancellationToken);
                     results.Add(new CompletedPullRequestResult(
                         repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
                         "Pull request was abandoned in Azure DevOps."));
@@ -189,6 +194,7 @@ public sealed class ReleasePullRequestBatchService
 
                 if (string.IsNullOrEmpty(snapshot.LastMergeSourceCommitId))
                 {
+                    await _db.SaveChangesAsync(cancellationToken);
                     results.Add(new CompletedPullRequestResult(
                         repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
                         "Could not determine the merge source commit."));
@@ -204,6 +210,9 @@ public sealed class ReleasePullRequestBatchService
                     snapshot.LastMergeSourceCommitId,
                     cancellationToken);
 
+                pr.Status = ReleasePullRequestStatus.Completed;
+                await _db.SaveChangesAsync(cancellationToken);
+
                 results.Add(new CompletedPullRequestResult(
                     repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, null));
             }
@@ -214,7 +223,104 @@ public sealed class ReleasePullRequestBatchService
             }
         }
 
+        await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
         return results;
+    }
+
+    /// <summary>
+    /// Checks every stored pull request (optionally scoped to one phase) against Azure DevOps and updates
+    /// the locally stored status. Does not attempt to complete/merge anything.
+    /// </summary>
+    public async Task<IReadOnlyList<ReleasePullRequestStatusResult>> RefreshPullRequestStatusesAsync(
+        Guid releaseId,
+        ReleasePrPhase? phase,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.GetRequiredUserId();
+
+        var query = _db.ReleasePullRequests.Where(pr => pr.ReleaseId == releaseId);
+        if (phase is { } p)
+            query = query.Where(pr => pr.Phase == p);
+
+        var prs = await query.Include(pr => pr.RegisteredRepository).ToListAsync(cancellationToken);
+
+        var results = new List<ReleasePullRequestStatusResult>();
+        foreach (var pr in prs)
+        {
+            var repo = pr.RegisteredRepository;
+            try
+            {
+                var status = await _ado.TryGetGitPullRequestStatusAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    pr.AzureDevOpsPullRequestId,
+                    cancellationToken);
+
+                pr.Status = MapPullRequestStatus(status);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                // Leave the last known status untouched; still report it so the caller sees something.
+            }
+
+            results.Add(new ReleasePullRequestStatusResult(pr.Id, pr.Status));
+        }
+
+        await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
+        return results;
+    }
+
+    /// <summary>
+    /// A release starts life as <see cref="ReleaseLifecycleStatus.Draft"/>. As soon as one of its PRs is
+    /// confirmed completed (via our own "Complete all" action, or discovered through a status check),
+    /// the release is no longer just a draft — bump it to <see cref="ReleaseLifecycleStatus.Active"/>.
+    /// </summary>
+    private async Task PromoteReleaseIfHasCompletedPullRequestAsync(Guid releaseId, CancellationToken cancellationToken)
+    {
+        var release = await _db.Releases.FirstOrDefaultAsync(r => r.Id == releaseId, cancellationToken);
+        if (release is null || release.Status != ReleaseLifecycleStatus.Draft)
+            return;
+
+        var hasCompletedPullRequest = await _db.ReleasePullRequests.AnyAsync(
+            pr => pr.ReleaseId == releaseId && pr.Status == ReleasePullRequestStatus.Completed,
+            cancellationToken);
+
+        if (!hasCompletedPullRequest)
+            return;
+
+        release.Status = ReleaseLifecycleStatus.Active;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>ADO returns PR status as a string (e.g. <c>active</c>) or sometimes a numeric enum value.</summary>
+    private static ReleasePullRequestStatus MapPullRequestStatus(string? adoStatus)
+    {
+        if (string.IsNullOrWhiteSpace(adoStatus))
+            return ReleasePullRequestStatus.Unknown;
+
+        var s = adoStatus.Trim();
+        if (int.TryParse(s, out var n))
+        {
+            // PullRequestStatus (Azure DevOps Git REST): notSet=0, active=1, abandoned=2, completed=3.
+            return n switch
+            {
+                1 => ReleasePullRequestStatus.Active,
+                2 => ReleasePullRequestStatus.Abandoned,
+                3 => ReleasePullRequestStatus.Completed,
+                _ => ReleasePullRequestStatus.Unknown
+            };
+        }
+
+        return s.ToLowerInvariant() switch
+        {
+            "active" => ReleasePullRequestStatus.Active,
+            "completed" => ReleasePullRequestStatus.Completed,
+            "abandoned" => ReleasePullRequestStatus.Abandoned,
+            _ => ReleasePullRequestStatus.Unknown
+        };
     }
 
     /// <summary>

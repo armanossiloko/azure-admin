@@ -119,6 +119,14 @@
               <div style="display: flex; align-items: center; gap: var(--s-2)">
                 <span class="badge draft">{{ prs.length }} PR{{ prs.length === 1 ? '' : 's' }}</span>
                 @if (prs.length) {
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-ghost"
+                    (click)="checkPrStatuses(bucket.key)"
+                    [disabled]="checkingStatusPhase() === bucket.key"
+                  >
+                    {{ checkingStatusPhase() === bucket.key ? 'Checking…' : 'Check status' }}
+                  </button>
                   <button type="button" class="btn btn-sm btn-ghost" (click)="copyPrLinks(bucket.key)">Copy links</button>
                   <button type="button" class="btn btn-sm btn-ghost" (click)="openAllPrs(bucket.key)">Open all in ADO</button>
                   <button
@@ -141,6 +149,7 @@
                         <th>Team</th>
                         <th>Repo</th>
                         <th>Title</th>
+                        <th>Status</th>
                         <th class="actions"></th>
                       </tr>
                     </thead>
@@ -152,6 +161,7 @@
                           <div class="mono muted" style="font-size: 11px">{{ pr.repositoryIdOrName }}</div>
                         </td>
                         <td>{{ pr.title }}</td>
+                        <td><span [class]="prStatusBadgeClass(pr.status)">{{ pr.status }}</span></td>
                         <td class="actions">
                           <a class="btn btn-sm btn-ghost" [href]="pr.url" target="_blank" rel="noopener">
                             Open in ADO
@@ -186,6 +196,7 @@
                     <th>Repo</th>
                     <th>Phase</th>
                     <th>Title</th>
+                    <th>Status</th>
                     <th class="actions"></th>
                   </tr>
                 </thead>
@@ -198,6 +209,7 @@
                     </td>
                     <td><span class="badge draft">{{ phaseLabel(pr.phase) }}</span></td>
                     <td>{{ pr.title }}</td>
+                    <td><span [class]="prStatusBadgeClass(pr.status)">{{ pr.status }}</span></td>
                     <td class="actions">
                       <a class="btn btn-sm btn-ghost" [href]="pr.url" target="_blank" rel="noopener">
                         Open in ADO
