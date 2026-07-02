@@ -134,6 +134,90 @@ public sealed class ReleasePullRequestBatchService
     }
 
     /// <summary>
+    /// Completes (merges, no fast-forward) every pull request stored for this release + phase.
+    /// Continues past individual failures (already completed, conflicts, unmet policies, ...) and reports them per PR.
+    /// </summary>
+    public async Task<IReadOnlyList<CompletedPullRequestResult>> CompletePullRequestsForPhaseAsync(
+        Guid releaseId,
+        ReleasePrPhase phase,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.GetRequiredUserId();
+
+        var prs = await _db.ReleasePullRequests
+            .Where(pr => pr.ReleaseId == releaseId && pr.Phase == phase)
+            .Include(pr => pr.RegisteredRepository)
+            .OrderBy(pr => pr.RegisteredRepository.RepositoryIdOrName)
+            .ToListAsync(cancellationToken);
+
+        var results = new List<CompletedPullRequestResult>();
+        foreach (var pr in prs)
+        {
+            var repo = pr.RegisteredRepository;
+            try
+            {
+                var snapshot = await _ado.TryGetPullRequestSnapshotAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    pr.AzureDevOpsPullRequestId,
+                    cancellationToken);
+
+                if (snapshot is null)
+                {
+                    results.Add(new CompletedPullRequestResult(
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
+                        "Pull request no longer exists in Azure DevOps."));
+                    continue;
+                }
+
+                if (snapshot.Status.Equals("completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(new CompletedPullRequestResult(
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, "Already completed."));
+                    continue;
+                }
+
+                if (snapshot.Status.Equals("abandoned", StringComparison.OrdinalIgnoreCase))
+                {
+                    results.Add(new CompletedPullRequestResult(
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
+                        "Pull request was abandoned in Azure DevOps."));
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(snapshot.LastMergeSourceCommitId))
+                {
+                    results.Add(new CompletedPullRequestResult(
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
+                        "Could not determine the merge source commit."));
+                    continue;
+                }
+
+                await _ado.CompletePullRequestAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    pr.AzureDevOpsPullRequestId,
+                    snapshot.LastMergeSourceCommitId,
+                    cancellationToken);
+
+                results.Add(new CompletedPullRequestResult(
+                    repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, null));
+            }
+            catch (HttpRequestException ex)
+            {
+                results.Add(new CompletedPullRequestResult(
+                    repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false, ex.Message));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Drops <see cref="ReleasePullRequest"/> rows when the linked Azure DevOps PR was abandoned or no longer exists,
     /// so a new batch can recreate PRs. Active or completed PRs still block.
     /// </summary>

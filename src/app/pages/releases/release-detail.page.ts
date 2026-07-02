@@ -23,6 +23,17 @@ type ReleasePullRequest = {
   createdAt: string;
 };
 
+type CompletedPullRequestResult = {
+  repositoryIdOrName: string;
+  pullRequestId: number;
+  success: boolean;
+  message: string | null;
+};
+
+type CompleteBatchResponse = {
+  results: CompletedPullRequestResult[];
+};
+
 type ReleaseCommitItem = {
   commitId: string;
   comment: string;
@@ -103,6 +114,7 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly notesBusy = signal(false);
   protected readonly notesMessage = signal<string | null>(null);
   protected readonly copyMessage = signal<string | null>(null);
+  protected readonly completingPhase = signal<'dev' | 'prod' | null>(null);
   protected readonly previewOpen = signal(false);
   protected readonly previewHtml = signal<SafeHtml>('');
 
@@ -215,6 +227,92 @@ export class ReleaseDetailPage implements OnInit {
     return this.commitsForBlock(block).length > 0;
   }
 
+  protected async copyPrLinks(phaseKey: 'dev' | 'prod'): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey);
+    if (!prs.length) {
+      this.copyMessage.set('No PRs in this phase yet.');
+      return;
+    }
+
+    const byTeam = new Map<string, string[]>();
+    for (const pr of prs) {
+      const urls = byTeam.get(pr.teamName) ?? [];
+      urls.push(pr.url);
+      byTeam.set(pr.teamName, urls);
+    }
+    const text = [...byTeam.entries()].map(([team, urls]) => `${team}:\n${urls.join('\n')}`).join('\n\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      this.copyMessage.set('Copied PR links to clipboard.');
+    } catch {
+      this.copyMessage.set('Could not copy to clipboard.');
+    }
+  }
+
+  protected openAllPrs(phaseKey: 'dev' | 'prod'): void {
+    const rel = this.release();
+    if (!rel) return;
+    for (const pr of this.pullRequestsInPhase(rel.pullRequests, phaseKey)) {
+      window.open(pr.url, '_blank', 'noopener');
+    }
+  }
+
+  protected async completeAllPrs(phaseKey: 'dev' | 'prod'): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey);
+    if (!prs.length) return;
+
+    const phaseTitle = this.prPhaseBuckets.find((b) => b.key === phaseKey)?.title ?? phaseKey;
+    const confirmed = confirm(
+      `Complete (rebase and fast-forward) all ${prs.length} PR${prs.length === 1 ? '' : 's'} in "${phaseTitle}"?\n\n` +
+        'This merges directly in Azure DevOps and cannot be undone from here.'
+    );
+    if (!confirmed) return;
+
+    this.completingPhase.set(phaseKey);
+    this.error.set(null);
+    this.copyMessage.set(null);
+    try {
+      const phase = phaseKey === 'prod' ? 'MasterToProd' : 'DevToMaster';
+      const resp = await firstValueFrom(
+        this.http.post<CompleteBatchResponse>(`/api/releases/${rel.id}/pull-requests/complete-batch`, { phase })
+      );
+      const results = resp?.results ?? [];
+      const failed = results.filter((r) => !r.success);
+      const succeeded = results.filter((r) => r.success);
+
+      if (failed.length) {
+        const detail = failed.map((f) => `${f.repositoryIdOrName}: ${f.message ?? 'failed'}`).join(' · ');
+        this.error.set(`Completed ${succeeded.length}/${results.length} PRs in ${phaseTitle}. Failed — ${detail}`);
+      } else {
+        this.copyMessage.set(`Completed all ${succeeded.length} PR${succeeded.length === 1 ? '' : 's'} in ${phaseTitle}.`);
+      }
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.completingPhase.set(null);
+    }
+  }
+
+  private prettyError(e: unknown): string {
+    const http = e as { error?: unknown; message?: string };
+    const body = http?.error;
+    const nested =
+      typeof body === 'object' && body !== null && 'message' in body
+        ? String((body as { message: unknown }).message)
+        : null;
+    return (
+      nested ??
+      (typeof body === 'string' ? body : null) ??
+      http?.message ??
+      'Request failed. Check backend logs for details.'
+    );
+  }
+
   protected async copyMarkdown(scope: 'all' | 'phase' | 'repo', phaseKey?: 'dev' | 'prod', block?: ReleaseRepositoryCommitNotes): Promise<void> {
     const rel = this.release();
     if (!rel) return;
@@ -283,11 +381,8 @@ export class ReleaseDetailPage implements OnInit {
   private blockToMarkdown(_releaseTitle: string, block: ReleaseRepositoryCommitNotes): string {
     const lines: string[] = [];
     const repo = this.repoDisplayNotes(block);
-    const src = this.branchShort(block.sourceRefName);
-    const tgt = this.branchShort(block.targetRefName);
 
-    lines.push(`### ${repo}`);
-    lines.push('', `\`${src}\` → \`${tgt}\``, '');
+    lines.push(`### ${repo}`, '');
 
     if (block.commitGroups?.length) {
       for (const group of block.commitGroups) {
@@ -321,12 +416,6 @@ export class ReleaseDetailPage implements OnInit {
     }
     lines.push('');
     return lines.join('\n').trim();
-  }
-
-  private branchShort(ref: string): string {
-    const r = ref.trim();
-    const p = 'refs/heads/';
-    return r.toLowerCase().startsWith(p) ? r.slice(p.length) : r;
   }
 
   protected openPreview(): void {

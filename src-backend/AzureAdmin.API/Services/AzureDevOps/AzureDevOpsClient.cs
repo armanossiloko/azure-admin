@@ -214,6 +214,91 @@ public sealed class AzureDevOpsClient
         return new AuthenticationHeaderValue("Basic", token);
     }
 
+    /// <summary>Fetches PR status, merge status and the source commit needed to complete the PR.</summary>
+    public async Task<AzureDevOpsPullRequestSnapshot?> TryGetPullRequestSnapshotAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        int pullRequestId,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+
+        var url =
+            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+
+        var http = _httpClientFactory.CreateClient();
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
+
+        using var resp = await http.GetAsync(url, ct);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            return null;
+
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Azure DevOps get PR failed ({(int)resp.StatusCode}): {text}");
+
+        using var doc = JsonDocument.Parse(text);
+        var root = doc.RootElement;
+
+        var status = root.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.String
+            ? statusEl.GetString() ?? ""
+            : "";
+
+        var mergeStatus = root.TryGetProperty("mergeStatus", out var mergeStatusEl) && mergeStatusEl.ValueKind == JsonValueKind.String
+            ? mergeStatusEl.GetString()
+            : null;
+
+        string? commitId = null;
+        if (root.TryGetProperty("lastMergeSourceCommit", out var lastMergeSourceCommit) &&
+            lastMergeSourceCommit.TryGetProperty("commitId", out var commitIdEl) &&
+            commitIdEl.ValueKind == JsonValueKind.String)
+            commitId = commitIdEl.GetString();
+
+        return new AzureDevOpsPullRequestSnapshot(status, mergeStatus, commitId);
+    }
+
+    /// <summary>Completes a pull request using the "rebase and fast-forward" merge strategy (no merge commit).</summary>
+    public async Task CompletePullRequestAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        int pullRequestId,
+        string lastMergeSourceCommitId,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+
+        var url =
+            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+
+        var body = new
+        {
+            status = "completed",
+            lastMergeSourceCommit = new { commitId = lastMergeSourceCommitId },
+            completionOptions = new
+            {
+                mergeStrategy = "rebase",
+                deleteSourceBranch = false,
+                bypassPolicy = false
+            }
+        };
+
+        var http = _httpClientFactory.CreateClient();
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
+
+        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        using var resp = await http.PatchAsync(url, content, ct);
+        var respText = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+            throw new HttpRequestException($"Azure DevOps PR complete failed ({(int)resp.StatusCode}): {respText}");
+    }
+
     public async Task<IReadOnlyList<AzureDevOpsGitRef>> ListBranchRefsAsync(
         Guid userId,
         string organization,
@@ -385,3 +470,5 @@ public sealed record AzureDevOpsCreatePullRequestResponse
 public sealed record AzureDevOpsCommitBrief(string CommitId, string Comment, string AuthorName, DateTimeOffset CommittedDate);
 
 public sealed record AzureDevOpsGitRef(string Name, string ObjectId);
+
+public sealed record AzureDevOpsPullRequestSnapshot(string Status, string? MergeStatus, string? LastMergeSourceCommitId);

@@ -148,6 +148,16 @@
               @if (teamIncluded(t.id)) {
                 <div style="padding: var(--s-3); background: var(--bg)">
                   @if (reposForTeam(t.id).length) {
+                    <label style="display: flex; align-items: center; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; margin-bottom: 4px">
+                      <input
+                        type="checkbox"
+                        class="checkbox"
+                        [checked]="allReposSelectedForTeam(t.id)"
+                        (change)="toggleAllReposForTeam(t.id, $any($event.target).checked)"
+                        [disabled]="isSubmitting()"
+                      />
+                      <span class="muted" style="font-size: 12px; font-weight: 600">Select all repositories</span>
+                    </label>
                     <div style="display: flex; flex-direction: column; gap: 4px">
                       @for (r of reposForTeam(t.id); track r.id) {
                         <label style="display: flex; align-items: start; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; transition: background 0.12s"

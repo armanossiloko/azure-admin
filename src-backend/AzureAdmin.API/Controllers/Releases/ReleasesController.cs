@@ -230,6 +230,26 @@ public sealed class ReleasesController : ControllerBase
         }
     }
 
+    [HttpPost("{releaseId:guid}/pull-requests/complete-batch")]
+    public async Task<ActionResult<CompletePullRequestsBatchResponse>> CompletePullRequestsBatch(
+        Guid releaseId,
+        [FromBody] CompletePullRequestsBatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await _db.Releases.AnyAsync(r => r.Id == releaseId, cancellationToken))
+            return NotFound();
+
+        try
+        {
+            var results = await _batchService.CompletePullRequestsForPhaseAsync(releaseId, request.Phase, cancellationToken);
+            return Ok(new CompletePullRequestsBatchResponse(results));
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost("{releaseId:guid}/commit-notes/refresh")]
     public async Task<IActionResult> RefreshCommitNotes(Guid releaseId, CancellationToken cancellationToken)
     {

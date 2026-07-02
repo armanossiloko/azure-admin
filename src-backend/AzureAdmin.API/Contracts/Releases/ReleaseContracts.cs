@@ -54,6 +54,16 @@ public sealed record CreatedPullRequestResult(string RepositoryIdOrName, int Pul
 
 public sealed record AddTeamToReleaseRequest(Guid TeamId);
 
+public sealed record CompletePullRequestsBatchRequest(ReleasePrPhase Phase);
+
+public sealed record CompletePullRequestsBatchResponse(IReadOnlyList<CompletedPullRequestResult> Results);
+
+public sealed record CompletedPullRequestResult(
+    string RepositoryIdOrName,
+    int PullRequestId,
+    bool Success,
+    string? Message);
+
 public sealed record ReleaseCommitItemDto(string CommitId, string Comment, string AuthorName, DateTimeOffset CommittedDate);
 
 public sealed record JiraTicketRefDto(string Key, string Url);

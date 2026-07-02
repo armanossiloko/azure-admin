@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { SelectedOrgService } from '../../services/selected-org.service';
-import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -104,7 +104,7 @@ export class ReleaseCreatePage implements OnInit {
       this.reposByTeam.set(new Map());
       this.selectedRepoIdsByTeam.set(new Map());
       this.reposLoadError.set(null);
-      void this.reloadReposForIncludedTeams();
+      untracked(() => void this.reloadReposForIncludedTeams());
     });
   }
 
@@ -220,6 +220,23 @@ export class ReleaseCreatePage implements OnInit {
 
   protected selectedCountForTeam(teamId: string): number {
     return this.selectedRepoIdsByTeam().get(teamId)?.size ?? 0;
+  }
+
+  protected allReposSelectedForTeam(teamId: string): boolean {
+    const repos = this.reposForTeam(teamId);
+    if (!repos.length) return false;
+    const selected = this.selectedRepoIdsByTeam().get(teamId);
+    return repos.every(r => selected?.has(r.id));
+  }
+
+  protected toggleAllReposForTeam(teamId: string, checked: boolean): void {
+    this.selectedRepoIdsByTeam.update(m => {
+      const next = new Map<string, Set<string>>();
+      for (const [k, v] of m) next.set(k, new Set(v));
+      const repoIds = this.reposForTeam(teamId).map(r => r.id);
+      next.set(teamId, checked ? new Set(repoIds) : new Set());
+      return next;
+    });
   }
 
   async submit(): Promise<void> {
