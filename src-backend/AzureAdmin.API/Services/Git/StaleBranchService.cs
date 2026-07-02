@@ -20,12 +20,18 @@ public sealed class StaleBranchService
 
     private readonly ApplicationDbContext _db;
     private readonly AzureDevOpsClient _ado;
+    private readonly IAzureDevOpsPatResolver _patResolver;
     private readonly ICurrentUser _currentUser;
 
-    public StaleBranchService(ApplicationDbContext db, AzureDevOpsClient ado, ICurrentUser currentUser)
+    public StaleBranchService(
+        ApplicationDbContext db,
+        AzureDevOpsClient ado,
+        IAzureDevOpsPatResolver patResolver,
+        ICurrentUser currentUser)
     {
         _db = db;
         _ado = ado;
+        _patResolver = patResolver;
         _currentUser = currentUser;
     }
 
@@ -60,6 +66,22 @@ public sealed class StaleBranchService
                 continue;
             }
 
+            // Resolve the PAT once per repo up front: the branch lookups below run concurrently, and
+            // resolving it inside each parallel task would hit the shared (non-thread-safe) DbContext at once.
+            var hasStaleCandidates = refs.Any(r => !IsProtectedBranch(AzureDevOpsClient.BranchShortName(r.Name)));
+            string? pat = null;
+            if (hasStaleCandidates)
+            {
+                try
+                {
+                    pat = await _patResolver.ResolvePatForOrganizationAsync(userId, orgKey, ct);
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+            }
+
             using var gate = new SemaphoreSlim(MaxConcurrentCommitLookups);
             var branchTasks = refs.Select(async gitRef =>
             {
@@ -67,13 +89,13 @@ public sealed class StaleBranchService
                 var isProtected = IsProtectedBranch(branchName);
                 DateTimeOffset? lastCommit = null;
 
-                if (!isProtected)
+                if (!isProtected && pat is not null)
                 {
                     await gate.WaitAsync(ct);
                     try
                     {
                         lastCommit = await _ado.TryGetCommitDateAsync(
-                            userId,
+                            pat,
                             orgKey,
                             repo.AzureDevOpsProject,
                             repo.RepositoryIdOrName,

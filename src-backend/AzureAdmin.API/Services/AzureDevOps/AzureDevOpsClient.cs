@@ -365,7 +365,22 @@ public sealed class AzureDevOpsClient
         CancellationToken ct)
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+        return await TryGetCommitDateAsync(pat, organization, project, repositoryIdOrName, commitId, ct);
+    }
 
+    /// <summary>
+    /// Same as the <see cref="Guid"/> overload but takes an already-resolved PAT. Use this when fanning out
+    /// many concurrent lookups (e.g. per-branch commit dates) so callers resolve the PAT once instead of each
+    /// parallel call hitting <see cref="IAzureDevOpsPatResolver"/> (and its backing DbContext) concurrently.
+    /// </summary>
+    public async Task<DateTimeOffset?> TryGetCommitDateAsync(
+        string pat,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        string commitId,
+        CancellationToken ct)
+    {
         var url =
             $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/commits/{Uri.EscapeDataString(commitId)}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
 

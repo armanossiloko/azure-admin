@@ -115,6 +115,9 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly notesMessage = signal<string | null>(null);
   protected readonly copyMessage = signal<string | null>(null);
   protected readonly completingPhase = signal<'dev' | 'prod' | null>(null);
+  protected readonly closingRelease = signal(false);
+  protected readonly collapsedPhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set());
+  protected readonly collapsedNotePhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
   protected readonly previewHtml = signal<SafeHtml>('');
 
@@ -168,6 +171,55 @@ export class ReleaseDetailPage implements OnInit {
       this.error.set('Could not refresh commit notes. Check PAT permissions and try again.');
     } finally {
       this.notesBusy.set(false);
+    }
+  }
+
+  protected phaseCollapsed(key: 'dev' | 'prod'): boolean {
+    return this.collapsedPhases().has(key);
+  }
+
+  protected togglePhaseCollapsed(key: 'dev' | 'prod'): void {
+    this.collapsedPhases.update((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  protected noteBucketCollapsed(key: 'dev' | 'prod'): boolean {
+    return this.collapsedNotePhases().has(key);
+  }
+
+  protected toggleNoteBucketCollapsed(key: 'dev' | 'prod'): void {
+    this.collapsedNotePhases.update((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  protected isReleaseClosed(status: string): boolean {
+    const s = (status || '').toLowerCase();
+    return s === 'completed' || s === 'archived';
+  }
+
+  protected async closeRelease(): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    if (!confirm(`Close release "${rel.title}"? No further PR batches can be opened on it afterwards.`)) return;
+
+    this.closingRelease.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.http.post(`/api/releases/${rel.id}/close`, {}));
+      this.release.update((r) => (r ? { ...r, status: 'Completed' } : r));
+      this.copyMessage.set('Release closed.');
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.closingRelease.set(false);
     }
   }
 

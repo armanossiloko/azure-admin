@@ -299,6 +299,22 @@ public sealed class ReleasesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = releaseId }, new ReleaseTeamDto(rt.Id, request.TeamId, teamName));
     }
 
+    [HttpPost("{id:guid}/close")]
+    public async Task<ActionResult<ReleaseSummaryDto>> Close(Guid id, CancellationToken cancellationToken)
+    {
+        var release = await _db.Releases.FindAsync([id], cancellationToken);
+        if (release is null)
+            return NotFound();
+
+        if (release.Status is ReleaseLifecycleStatus.Completed or ReleaseLifecycleStatus.Archived)
+            return BadRequest(new { message = "This release is already closed." });
+
+        release.Status = ReleaseLifecycleStatus.Completed;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(new ReleaseSummaryDto(release.Id, release.Title, release.SprintLabel, release.Status, release.CreatedAt));
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
