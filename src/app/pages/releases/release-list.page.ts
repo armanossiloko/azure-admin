@@ -42,6 +42,11 @@ export class ReleaseListPage implements OnInit {
     }
   }
 
+  protected isReleaseClosed(status: string): boolean {
+    const s = (status || '').toLowerCase();
+    return s === 'completed' || s === 'archived';
+  }
+
   protected async delete(id: string, title: string): Promise<void> {
     if (!confirm(`Delete release "${title}"? This will remove all associated PRs and data.`)) return;
     try {

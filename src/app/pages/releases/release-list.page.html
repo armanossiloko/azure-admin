@@ -18,7 +18,7 @@
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        New release PRs
+        New release
       </a>
     </div>
   </div>
@@ -57,7 +57,9 @@
                 </td>
                 <td class="muted">{{ r.createdAt | date: 'medium' }}</td>
                 <td class="actions" (click)="$event.stopPropagation()">
-                  <a class="btn btn-sm" [routerLink]="['/releases', r.id, 'add-prs']">Add PRs</a>
+                  @if (!isReleaseClosed(r.status)) {
+                    <a class="btn btn-sm" [routerLink]="['/releases', r.id, 'add-prs']">Add PRs</a>
+                  }
                   <a class="btn btn-sm btn-ghost" [routerLink]="['/releases', r.id]">
                     Open
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
