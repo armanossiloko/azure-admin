@@ -19,6 +19,7 @@ type RegisteredRepository = {
   repositoryIdOrName: string;
   serviceName: string | null;
   teamId: string;
+  isDecommissioned: boolean;
 };
 
 type ReleaseSummary = {
@@ -31,6 +32,7 @@ type ReleaseSummary = {
 
 type BatchCreateResponse = {
   results: { repositoryIdOrName: string; pullRequestId: number; url: string }[];
+  skippedDecommissionedRepositories?: string[];
 };
 
 type ReleasePrPhase = 'DevToMaster' | 'MasterToProd';
@@ -64,6 +66,7 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly isSubmitting = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly created = signal<BatchCreateResponse | null>(null);
+  protected readonly skippedDecommissioned = signal<string[]>([]);
 
   /** When set, PRs are added to this release directly (no find-or-create). */
   protected readonly existingRelease = signal<ReleaseForBatchContext | null>(null);
@@ -171,6 +174,14 @@ export class ReleaseCreatePage implements OnInit {
     return this.reposByTeam().get(teamId) ?? [];
   }
 
+  protected activeReposForTeam(teamId: string): RegisteredRepository[] {
+    return this.reposForTeam(teamId).filter(r => !r.isDecommissioned);
+  }
+
+  protected decommissionedReposForTeam(teamId: string): RegisteredRepository[] {
+    return this.reposForTeam(teamId).filter(r => r.isDecommissioned);
+  }
+
   private async reloadReposForIncludedTeams(): Promise<void> {
     for (const teamId of this.includedTeamIds()) {
       await this.ensureReposLoaded(teamId, true);
@@ -223,7 +234,7 @@ export class ReleaseCreatePage implements OnInit {
   }
 
   protected allReposSelectedForTeam(teamId: string): boolean {
-    const repos = this.reposForTeam(teamId);
+    const repos = this.activeReposForTeam(teamId);
     if (!repos.length) return false;
     const selected = this.selectedRepoIdsByTeam().get(teamId);
     return repos.every(r => selected?.has(r.id));
@@ -233,7 +244,7 @@ export class ReleaseCreatePage implements OnInit {
     this.selectedRepoIdsByTeam.update(m => {
       const next = new Map<string, Set<string>>();
       for (const [k, v] of m) next.set(k, new Set(v));
-      const repoIds = this.reposForTeam(teamId).map(r => r.id);
+      const repoIds = this.activeReposForTeam(teamId).map(r => r.id);
       next.set(teamId, checked ? new Set(repoIds) : new Set());
       return next;
     });
@@ -242,6 +253,7 @@ export class ReleaseCreatePage implements OnInit {
   async submit(): Promise<void> {
     this.error.set(null);
     this.created.set(null);
+    this.skippedDecommissioned.set([]);
 
     const included = [...this.includedTeamIds()];
     if (!included.length) {
@@ -251,13 +263,16 @@ export class ReleaseCreatePage implements OnInit {
 
     let anyRepo = false;
     for (const tid of included) {
-      if ((this.selectedRepoIdsByTeam().get(tid)?.size ?? 0) > 0) {
+      const activeSelected = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id =>
+        this.activeReposForTeam(tid).some(r => r.id === id)
+      );
+      if (activeSelected.length > 0) {
         anyRepo = true;
         break;
       }
     }
     if (!anyRepo) {
-      this.error.set('Select at least one repository for at least one included team.');
+      this.error.set('Select at least one active repository. Decommissioned services are excluded from release pull requests.');
       return;
     }
 
@@ -297,9 +312,13 @@ export class ReleaseCreatePage implements OnInit {
       };
 
       const teamErrors: string[] = [];
+      const skipped: string[] = [];
 
       for (const tid of included) {
-        const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])];
+        const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id => {
+          const repo = this.reposForTeam(tid).find(r => r.id === id);
+          return !repo?.isDecommissioned;
+        });
         if (!ids.length) continue;
         try {
           const resp = await firstValueFrom(
@@ -309,6 +328,7 @@ export class ReleaseCreatePage implements OnInit {
             )
           );
           aggregated.push(...(resp?.results ?? []));
+          skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
         } catch (e: unknown) {
           const teamName = this.teams().find(t => t.id === tid)?.name ?? tid;
           teamErrors.push(`${teamName}: ${this.prettyError(e)}`);
@@ -316,6 +336,7 @@ export class ReleaseCreatePage implements OnInit {
       }
 
       this.created.set({ results: aggregated });
+      this.skippedDecommissioned.set(skipped);
       if (teamErrors.length) this.error.set(teamErrors.join(' · '));
     } catch (e: unknown) {
       this.error.set(this.prettyError(e));

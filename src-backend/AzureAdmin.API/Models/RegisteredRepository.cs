@@ -12,6 +12,12 @@ public sealed class RegisteredRepository
     /// <summary>Optional display name for the service or API.</summary>
     public string? ServiceName { get; set; }
 
+    /// <summary>
+    /// Decommissioned (inactive) services are kept in the catalog but excluded from new release pull requests.
+    /// Pull requests already recorded on earlier releases are left unchanged.
+    /// </summary>
+    public bool IsDecommissioned { get; set; }
+
     public Guid TeamId { get; set; }
     public Team Team { get; set; } = null!;
 

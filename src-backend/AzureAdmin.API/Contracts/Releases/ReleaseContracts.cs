@@ -49,7 +49,9 @@ public sealed record BatchCreateReleasePullRequestsRequest(
     string? TargetBranch,
     IReadOnlyList<Guid> RegisteredRepositoryIds);
 
-public sealed record BatchCreateReleasePullRequestsResponse(IReadOnlyList<CreatedPullRequestResult> Results);
+public sealed record BatchCreateReleasePullRequestsResponse(
+    IReadOnlyList<CreatedPullRequestResult> Results,
+    IReadOnlyList<string> SkippedDecommissionedRepositories);
 
 public sealed record CreatedPullRequestResult(string RepositoryIdOrName, int PullRequestId, string Url);
 

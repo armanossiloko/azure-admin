@@ -12,6 +12,7 @@ type RegisteredRepository = {
   repositoryIdOrName: string;
   serviceName: string | null;
   teamId: string;
+  isDecommissioned: boolean;
 };
 
 type GitBranch = {

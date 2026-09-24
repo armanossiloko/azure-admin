@@ -6,7 +6,8 @@ public sealed record RegisteredRepositoryDto(
     string AzureDevOpsProject,
     string RepositoryIdOrName,
     string? ServiceName,
-    Guid TeamId);
+    Guid TeamId,
+    bool IsDecommissioned);
 
 public sealed record RegisterRepositoryRequest(
     string AzureDevOpsOrganization,
@@ -15,4 +16,4 @@ public sealed record RegisterRepositoryRequest(
     string? ServiceName,
     Guid TeamId);
 
-public sealed record PatchRegisteredRepositoryRequest(string? ServiceName);
+public sealed record PatchRegisteredRepositoryRequest(string? ServiceName, bool? IsDecommissioned);

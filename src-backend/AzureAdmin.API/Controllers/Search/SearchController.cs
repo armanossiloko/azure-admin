@@ -74,7 +74,9 @@ public sealed class SearchController : ControllerBase
             .Select(r => new SearchHitDto(
                 "repository",
                 r.ServiceName ?? r.RepositoryIdOrName,
-                $"{r.AzureDevOpsProject} · {r.AzureDevOpsOrganization}",
+                r.IsDecommissioned
+                    ? $"{r.AzureDevOpsProject} · {r.AzureDevOpsOrganization} · Decommissioned"
+                    : $"{r.AzureDevOpsProject} · {r.AzureDevOpsOrganization}",
                 "/repositories"))
             .ToListAsync(cancellationToken);
         hits.AddRange(repos);

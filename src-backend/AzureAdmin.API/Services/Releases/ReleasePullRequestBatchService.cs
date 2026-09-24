@@ -27,7 +27,7 @@ public sealed class ReleasePullRequestBatchService
         _commitNotes = commitNotes;
     }
 
-    public async Task<IReadOnlyList<CreatedPullRequestResult>> CreatePullRequestsForReleaseAsync(
+    public async Task<BatchCreateReleasePullRequestsResponse> CreatePullRequestsForReleaseAsync(
         Guid releaseId,
         Guid teamId,
         BatchCreateReleasePullRequestsRequest request,
@@ -71,12 +71,24 @@ public sealed class ReleasePullRequestBatchService
             }
         }
 
+        var activeRepos = repos.Where(r => !r.IsDecommissioned).ToList();
+        var skippedDecommissioned = repos
+            .Where(r => r.IsDecommissioned)
+            .Select(r => string.IsNullOrWhiteSpace(r.ServiceName) ? r.RepositoryIdOrName : r.ServiceName)
+            .ToList();
+        if (activeRepos.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Every selected repository is decommissioned, so no pull requests were created. Restore a repository before including it in a release.");
+        }
+
         var userId = _currentUser.GetRequiredUserId();
+        var activeRepoIds = activeRepos.Select(r => r.Id).ToList();
         await RemoveAbandonedOrMissingPullRequestRowsAsync(
             userId,
             releaseId,
             request.Phase,
-            repoIds,
+            activeRepoIds,
             cancellationToken);
 
         var sourceBranch = ResolveSourceBranch(request);
@@ -84,7 +96,7 @@ public sealed class ReleasePullRequestBatchService
         var pullRequestTitle = BuildPullRequestTitle(request.Phase, release.SprintLabel);
 
         var results = new List<CreatedPullRequestResult>();
-        foreach (var repo in repos)
+        foreach (var repo in activeRepos)
         {
             var created = await _ado.CreatePullRequestAsync(
                 userId,
@@ -130,7 +142,7 @@ public sealed class ReleasePullRequestBatchService
                 cancellationToken);
         }
 
-        return results;
+        return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
     }
 
     /// <summary>

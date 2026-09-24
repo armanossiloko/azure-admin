@@ -121,7 +121,7 @@
       </svg>
       <div style="flex: 1">
         <h3 class="card-title">Teams & repositories</h3>
-        <p class="card-subtitle">Include every team that should open PRs for this release</p>
+        <p class="card-subtitle">Include every team that should open PRs. Decommissioned services stay listed and are not selected.</p>
       </div>
     </div>
     <div class="card-body">
@@ -148,18 +148,22 @@
               @if (teamIncluded(t.id)) {
                 <div style="padding: var(--s-3); background: var(--bg)">
                   @if (reposForTeam(t.id).length) {
-                    <label style="display: flex; align-items: center; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; margin-bottom: 4px">
-                      <input
-                        type="checkbox"
-                        class="checkbox"
-                        [checked]="allReposSelectedForTeam(t.id)"
-                        (change)="toggleAllReposForTeam(t.id, $any($event.target).checked)"
-                        [disabled]="isSubmitting()"
-                      />
-                      <span class="muted" style="font-size: 12px; font-weight: 600">Select all repositories</span>
-                    </label>
+                    @if (activeReposForTeam(t.id).length) {
+                      <label style="display: flex; align-items: center; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; margin-bottom: 4px">
+                        <input
+                          type="checkbox"
+                          class="checkbox"
+                          [checked]="allReposSelectedForTeam(t.id)"
+                          (change)="toggleAllReposForTeam(t.id, $any($event.target).checked)"
+                          [disabled]="isSubmitting()"
+                        />
+                        <span class="muted" style="font-size: 12px; font-weight: 600">Select all active repositories</span>
+                      </label>
+                    } @else {
+                      <p class="muted" style="font-size: 12px; margin: 4px 10px 8px">Every repository on this team is decommissioned, so this release will not open pull requests for it.</p>
+                    }
                     <div style="display: flex; flex-direction: column; gap: 4px">
-                      @for (r of reposForTeam(t.id); track r.id) {
+                      @for (r of activeReposForTeam(t.id); track r.id) {
                         <label style="display: flex; align-items: start; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); cursor: pointer; transition: background 0.12s"
                                [style.background]="isRepoSelected(t.id, r.id) ? 'var(--bg-3)' : 'transparent'"
                                (mouseenter)="$any($event.target).style.background = 'var(--bg-3)'"
@@ -170,6 +174,18 @@
                             <div class="mono muted" style="font-size: 11px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }} · {{ r.repositoryIdOrName }}</div>
                           </div>
                         </label>
+                      }
+                      @for (r of decommissionedReposForTeam(t.id); track r.id) {
+                        <div style="display: flex; align-items: start; gap: var(--s-3); padding: 8px 10px; border-radius: var(--r-2); opacity: 0.7">
+                          <input type="checkbox" class="checkbox" style="margin-top: 2px" disabled />
+                          <div style="flex: 1; min-width: 0">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px">
+                              <span style="font-weight: 500; font-size: 13px">{{ r.serviceName || r.repositoryIdOrName }}</span>
+                              <span class="badge warn">Decommissioned</span>
+                            </div>
+                            <div class="mono muted" style="font-size: 11px">Excluded from this release · {{ r.repositoryIdOrName }}</div>
+                          </div>
+                        </div>
                       }
                     </div>
                   } @else {
@@ -216,7 +232,15 @@
     </div>
   </div>
 
-  @if (created()) {
+  @if (skippedDecommissioned().length) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">
+        Skipped decommissioned services: {{ skippedDecommissioned().join(', ') }}.
+      </div>
+    </div>
+  }
+
+  @if ((created()?.results?.length ?? 0) > 0) {
     <div class="card" style="margin-bottom: var(--s-5)">
       <div class="card-header">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">

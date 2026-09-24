@@ -54,6 +54,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.Property(x => x.AzureDevOpsProject).HasMaxLength(256).IsRequired();
             e.Property(x => x.RepositoryIdOrName).HasMaxLength(512).IsRequired();
             e.Property(x => x.ServiceName).HasMaxLength(512);
+            e.Property(x => x.IsDecommissioned).HasDefaultValue(false);
             e.HasIndex(x => new { x.AzureDevOpsOrganization, x.AzureDevOpsProject, x.RepositoryIdOrName })
                 .IsUnique();
             e.HasOne(x => x.Team)

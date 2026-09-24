@@ -58,7 +58,7 @@
           <select id="filter-repo" class="select" [ngModel]="filterRepoId()" (ngModelChange)="filterRepoId.set($event)">
             <option value="">All registered repositories</option>
             @for (r of repos(); track r.id) {
-              <option [value]="r.id">{{ r.serviceName || r.repositoryIdOrName }} ({{ r.azureDevOpsProject }})</option>
+              <option [value]="r.id">{{ r.serviceName || r.repositoryIdOrName }} ({{ r.azureDevOpsProject }}){{ r.isDecommissioned ? ' — decommissioned' : '' }}</option>
             }
           </select>
         </div>

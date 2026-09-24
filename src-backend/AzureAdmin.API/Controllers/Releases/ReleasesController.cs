@@ -219,7 +219,7 @@ public sealed class ReleasesController : ControllerBase
                 request,
                 cancellationToken);
 
-            return Ok(new BatchCreateReleasePullRequestsResponse(results));
+            return Ok(results);
         }
         catch (InvalidOperationException ex)
         {

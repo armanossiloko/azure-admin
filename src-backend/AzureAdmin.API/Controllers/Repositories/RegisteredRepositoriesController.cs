@@ -59,7 +59,8 @@ public sealed class RegisteredRepositoriesController : ControllerBase
                 r.AzureDevOpsProject,
                 r.RepositoryIdOrName,
                 r.ServiceName,
-                r.TeamId))
+                r.TeamId,
+                r.IsDecommissioned))
             .ToListAsync(cancellationToken);
 
         return Ok(rows);
@@ -107,7 +108,8 @@ public sealed class RegisteredRepositoriesController : ControllerBase
             entity.AzureDevOpsProject,
             entity.RepositoryIdOrName,
             entity.ServiceName,
-            entity.TeamId));
+            entity.TeamId,
+            entity.IsDecommissioned));
     }
 
     [HttpPatch("{id:guid}")]
@@ -123,6 +125,9 @@ public sealed class RegisteredRepositoriesController : ControllerBase
         if (request.ServiceName is not null)
             row.ServiceName = string.IsNullOrWhiteSpace(request.ServiceName) ? null : request.ServiceName.Trim();
 
+        if (request.IsDecommissioned is { } decommissioned)
+            row.IsDecommissioned = decommissioned;
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new RegisteredRepositoryDto(
@@ -131,7 +136,8 @@ public sealed class RegisteredRepositoriesController : ControllerBase
             row.AzureDevOpsProject,
             row.RepositoryIdOrName,
             row.ServiceName,
-            row.TeamId));
+            row.TeamId,
+            row.IsDecommissioned));
     }
 
     [HttpDelete("{id:guid}")]

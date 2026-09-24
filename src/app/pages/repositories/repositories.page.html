@@ -2,7 +2,7 @@
   <div class="page-header">
     <div class="titles">
       <h1 class="page-title">Repositories</h1>
-      <p class="page-subtitle">Map Azure DevOps repos to a team so release batches know which PAT and PR scope to use.</p>
+      <p class="page-subtitle">Map Azure DevOps repos to a team. Decommission a service to keep it in the catalog without opening pull requests on the next release.</p>
     </div>
   </div>
 
@@ -196,13 +196,18 @@
       </svg>
       <h3 class="card-title">Catalog</h3>
       <div style="margin-left: auto; display: flex; align-items: center; gap: var(--s-3)">
+        <select class="select" style="width: 160px; height: 28px; font-size: 12px" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="decommissioned">Decommissioned</option>
+        </select>
         <select class="select" style="width: 180px; height: 28px; font-size: 12px" [ngModel]="filterTeamId()" (ngModelChange)="filterTeamId.set($event); refresh()">
           <option value="">All teams</option>
           <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
         </select>
       </div>
     </div>
-    @if (rows().length) {
+    @if (visibleRows().length) {
       <div class="card-body flush">
         <div class="tbl-wrap">
           <table class="tbl">
@@ -212,11 +217,12 @@
                 <th>ADO repo</th>
                 <th>Organization / project</th>
                 <th>Team</th>
+                <th>Status</th>
                 <th class="actions"></th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of rows()">
+              <tr *ngFor="let r of visibleRows()" [style.opacity]="r.isDecommissioned ? '0.72' : '1'">
                 <td>
                   <input
                     class="input"
@@ -231,7 +237,19 @@
                 <td class="mono">{{ r.repositoryIdOrName }}</td>
                 <td class="muted" style="font-size: 12px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
                 <td>{{ teamLabel(r.teamId) }}</td>
+                <td>
+                  @if (r.isDecommissioned) {
+                    <span class="badge warn">Decommissioned</span>
+                  } @else {
+                    <span class="badge ok">Active</span>
+                  }
+                </td>
                 <td class="actions">
+                  @if (r.isDecommissioned) {
+                    <button type="button" class="btn btn-sm" (click)="setDecommissioned(r, false)" [disabled]="busy()">Restore</button>
+                  } @else {
+                    <button type="button" class="btn btn-sm" (click)="setDecommissioned(r, true)" [disabled]="busy()">Decommission</button>
+                  }
                   <button type="button" class="btn btn-sm btn-danger" (click)="remove(r)" [disabled]="busy()">Remove</button>
                 </td>
               </tr>
@@ -248,8 +266,13 @@
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
           </div>
-          <h3>No repositories registered</h3>
-          <p>Register repositories manually or import from Azure DevOps.</p>
+          @if (rows().length && statusFilter()) {
+            <h3>No {{ statusFilter() }} repositories</h3>
+            <p>Change the status filter to see the rest of the catalog.</p>
+          } @else {
+            <h3>No repositories registered</h3>
+            <p>Register repositories manually or import from Azure DevOps.</p>
+          }
         </div>
       </div>
     }

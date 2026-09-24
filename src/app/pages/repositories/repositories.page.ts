@@ -14,6 +14,7 @@ type RegisteredRepository = {
   repositoryIdOrName: string;
   serviceName: string | null;
   teamId: string;
+  isDecommissioned: boolean;
 };
 
 type AdoOrgSummary = {
@@ -42,6 +43,7 @@ export class RepositoriesPage implements OnInit {
   protected readonly adoOrgs = signal<AdoOrgSummary[]>([]);
   protected readonly rows = signal<RegisteredRepository[]>([]);
   protected readonly filterTeamId = signal<string>('');
+  protected readonly statusFilter = signal('');
   protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -302,6 +304,37 @@ export class RepositoriesPage implements OnInit {
     try {
       await firstValueFrom(this.http.delete(`/api/registered-repositories/${row.id}`));
       this.info.set('Removed.');
+      await this.refresh();
+    } catch (e: unknown) {
+      this.error.set(this.fmtErr(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected visibleRows(): RegisteredRepository[] {
+    const filter = this.statusFilter().trim();
+    const rows = this.rows();
+    if (filter === 'active') return rows.filter(r => !r.isDecommissioned);
+    if (filter === 'decommissioned') return rows.filter(r => r.isDecommissioned);
+    return rows;
+  }
+
+  protected async setDecommissioned(row: RegisteredRepository, decommissioned: boolean): Promise<void> {
+    const label = row.serviceName?.trim() || row.repositoryIdOrName;
+    if (decommissioned && !confirm(`Decommission “${label}”? Future releases will not open pull requests for it.`)) {
+      return;
+    }
+    this.busy.set(true);
+    this.error.set(null);
+    this.info.set(null);
+    try {
+      await firstValueFrom(
+        this.http.patch(`/api/registered-repositories/${row.id}`, {
+          isDecommissioned: decommissioned
+        })
+      );
+      this.info.set(decommissioned ? `${label} is decommissioned and will be skipped on the next release.` : `${label} is active again.`);
       await this.refresh();
     } catch (e: unknown) {
       this.error.set(this.fmtErr(e));
