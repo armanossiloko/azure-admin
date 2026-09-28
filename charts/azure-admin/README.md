@@ -18,6 +18,17 @@ The version is calculated by [semantic-release](https://semantic-release.gitbook
 `feat:` -> minor, `feat!:` or a `BREAKING CHANGE:` footer -> major. The first release is `1.0.0`.
 The git tag (`v1.2.3`) is the only source of the version; `Chart.yaml` and `package.json` hold placeholders.
 
+## Install
+
+The chart is stored as an OCI artifact in ghcr.io, not in a classic Helm repository, so there is no
+`helm repo add` and no `index.yaml`. The GitHub package page therefore shows a generic `docker pull`
+line; that is just how GitHub displays any OCI artifact. Use Helm directly (Helm 3.8+):
+
+```bash
+helm show values oci://ghcr.io/<owner>/charts/azure-admin --version 1.0.0
+helm install azure-admin oci://ghcr.io/<owner>/charts/azure-admin --version 1.0.0 -f my-values.yaml
+```
+
 ## Required values
 
 ```yaml
@@ -41,9 +52,27 @@ Register these redirect URIs for the client (using the public host of the ingres
 - `https://<host>/signin-oidc`
 - `https://<host>/signout-callback-oidc`
 
+## Health endpoint
+
+`GET /health` (checks the database) is served on a separate container port `8081` (`health`) and is
+only reachable there; on the app port `8080` it returns 404, and the app itself returns 404 on `8081`.
+The port is used by the startup and readiness probes (liveness only checks that the app port is open, so
+a database outage does not restart pods). It is deliberately **not** in the Service or the Ingress.
+Anyone who can reach the pod IP in the cluster can still call it, so use a NetworkPolicy if you need
+to restrict that further.
+
 ## Argo CD
 
-From the OCI registry:
+From the OCI registry. The registry has to be known to Argo CD as a Helm repository with OCI enabled
+(no `oci://` prefix in `repoURL`); for a public package no credentials are needed:
+
+```yaml
+# Argo CD repository (Settings -> Repositories, or a declarative Secret with argocd.argoproj.io/secret-type: repository)
+type: helm
+name: azure-admin-charts
+url: ghcr.io/<owner>/charts
+enableOCI: "true"
+```
 
 ```yaml
 source:

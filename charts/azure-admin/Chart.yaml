@@ -2,6 +2,9 @@ apiVersion: v2
 name: azure-admin
 description: Azure DevOps admin tool (ASP.NET Core API + Angular SPA in a single image)
 type: application
+# Helm writes the first entry as org.opencontainers.image.source, which links the ghcr.io package to this repo.
+sources:
+  - https://github.com/armanossiloko/azure-admin
 # Placeholders: the real version and appVersion (= default image tag) are set when the chart
 # is published, see .github/workflows/build.yml. The version comes from semantic-release.
 version: 0.0.0
