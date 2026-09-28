@@ -55,7 +55,8 @@
   --bg-3: oklch(0.245 0.006 70);       /* hover */
   --bg-4: oklch(0.275 0.006 70);       /* active */
   --bg-sidebar: oklch(0.165 0.006 70);
-  --bg-input: oklch(0.20 0.006 70);
+  /* Darker than cards so fields stay visible on --bg-2 panels */
+  --bg-input: oklch(0.145 0.006 70);
 
   --border: oklch(0.31 0.006 70);
   --border-strong: oklch(0.39 0.006 70);
@@ -254,6 +255,18 @@ button { cursor: pointer; }
 }
 .app[data-sidebar="collapsed"] { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
 .app[data-sidebar="icon"] { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
+
+/* Explicit placement so auto-flow never drops main below the fold */
+.sidebar { grid-column: 1; grid-row: 2; min-height: 0; }
+.main {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+/* Routed page hosts are custom elements (display: inline by default) */
+.main > *:not(router-outlet) { display: block; }
 
 /* ====================== TOPBAR ===================== */
 .topbar {
@@ -461,10 +474,6 @@ button { cursor: pointer; }
 .app[data-sidebar="icon"] .org-switcher .chev { display: none; }
 
 /* ====================== MAIN CONTENT ===================== */
-.main {
-  overflow-y: auto;
-  background: var(--bg);
-}
 .page {
   max-width: 1400px;
   margin: 0 auto;
@@ -595,20 +604,27 @@ button { cursor: pointer; }
   line-height: 18px;
   white-space: nowrap;
   border: 1px solid transparent;
+  /* Default fill so bare badges (e.g. commit scopes) stay readable */
+  background: var(--bg-4);
+  color: var(--text-2);
+  border-color: var(--border);
 }
 .badge.solid { padding: 3px 9px; }
 .badge.dot::before {
-  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
   background: currentColor;
+  flex-shrink: 0;
 }
 
 .badge.draft   { background: var(--bg-4); color: var(--text-2); border-color: var(--border); }
-.badge.active  { background: var(--accent-soft); color: var(--accent-text); }
-.badge.ok      { background: var(--ok-soft); color: var(--ok-text); }
-.badge.warn    { background: var(--warn-soft); color: var(--warn-text); }
-.badge.danger  { background: var(--danger-soft); color: var(--danger-text); }
-.badge.info    { background: var(--info-soft); color: var(--info-text); }
-.badge.purple  { background: var(--purple-soft); color: var(--purple-text); }
+.badge.active  { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+.badge.ok      { background: var(--ok-soft); color: var(--ok-text); border-color: transparent; }
+.badge.warn    { background: var(--warn-soft); color: var(--warn-text); border-color: transparent; }
+.badge.danger  { background: var(--danger-soft); color: var(--danger-text); border-color: transparent; }
+.badge.info    { background: var(--info-soft); color: var(--info-text); border-color: transparent; }
+.badge.purple  { background: var(--purple-soft); color: var(--purple-text); border-color: transparent; }
 
 /* Phase badges (visual rhythm) */
 .phase {
@@ -911,17 +927,21 @@ button { cursor: pointer; }
   color: var(--text-2);
 }
 
-/* Status dot */
-.dot {
+/* Status dot — standalone indicator only.
+   Must not match `.badge.dot` (that modifier adds a ::before pip on badges).
+   Without :not(.badge), `.dot { width/height: 7px }` collapses "PAT stored" badges
+   and their overflowing text stacks on top of "Expires …". */
+.dot:not(.badge) {
   display: inline-block;
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--text-4);
+  flex-shrink: 0;
 }
-.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
-.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
-.dot.danger { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: pulse 2s ease-in-out infinite; }
-.dot.info { background: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
+.dot.ok:not(.badge) { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.dot.warn:not(.badge) { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.dot.danger:not(.badge) { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: pulse 2s ease-in-out infinite; }
+.dot.info:not(.badge) { background: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
 
 /* Progress */
 .progress {

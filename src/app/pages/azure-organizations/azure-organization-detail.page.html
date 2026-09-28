@@ -44,7 +44,7 @@
     <div class="card-body">
       @if (o.hasPatCredential) {
         <div style="margin-bottom: var(--s-4)">
-          <div style="display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2)">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2)">
             <span class="badge ok dot">PAT stored</span>
             @if (o.patExpiresAt) {
               @if (patExpired(o)) {
