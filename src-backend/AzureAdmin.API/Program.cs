@@ -177,6 +177,23 @@ using (var scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
+// /health is served only on its own cluster-internal port (bound via ASPNETCORE_HTTP_PORTS in the
+// Dockerfile), and the app only on the other port(s), so health details never appear behind the ingress.
+// Matches on the local port, not the Host header, which a client could fake.
+var healthPort = builder.Configuration.GetValue("Health:Port", 8081);
+app.Use(async (context, next) =>
+{
+    var onHealthPort = context.Connection.LocalPort == healthPort;
+    var isHealthPath = context.Request.Path.StartsWithSegments("/health");
+    if (onHealthPort != isHealthPath)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -198,6 +215,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHealthChecks("/health");
 
 // All non-API routes fall back to index.html so Angular handles client-side routing.
 app.MapFallbackToFile("index.html");

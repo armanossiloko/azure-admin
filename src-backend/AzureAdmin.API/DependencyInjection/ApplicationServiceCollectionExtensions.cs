@@ -1,6 +1,7 @@
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Git;
+using AzureAdmin.API.Services.Health;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
@@ -27,6 +28,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<NotificationService>();
         services.AddSingleton<ConventionalCommitParser>();
         services.AddSingleton<JiraReferenceExtractor>();
+
+        services.AddHealthChecks()
+            .AddCheck<DatabaseHealthCheck>("database");
 
         return services;
     }

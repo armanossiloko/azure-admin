@@ -42,6 +42,10 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            # Only for the kubelet probes. Deliberately not part of the Service or the Ingress.
+            - name: health
+              containerPort: 8081
+              protocol: TCP
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Production
@@ -79,20 +83,21 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           # The API applies EF migrations before it starts listening, so give startup room.
+          # /health includes the database. Liveness deliberately only checks the port: a database
+          # outage must not restart the pods, it only takes them out of the Service (readiness).
           startupProbe:
             httpGet:
-              path: /
-              port: http
+              path: /health
+              port: health
             periodSeconds: 5
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /health
+              port: health
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: http
             periodSeconds: 20
           resources:
