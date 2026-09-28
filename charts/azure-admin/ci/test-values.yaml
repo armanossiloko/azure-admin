@@ -1,0 +1,18 @@
+# Minimal values so `helm lint` / `helm template` pass in CI.
+config:
+  postgres:
+    host: postgres.example.svc
+  keycloak:
+    authority: https://keycloak.example.com/realms/test
+    clientId: azure-admin
+
+secrets:
+  postgresPassword: ci
+  keycloakClientSecret: ci
+
+ingress:
+  enabled: true
+  host: azure-admin.example.com
+  tls:
+    enabled: true
+    secretName: azure-admin-tls

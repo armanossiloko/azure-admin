@@ -1,0 +1,91 @@
+image:
+  repository: ghcr.io/armanossiloko/azure-admin
+  # Defaults to the chart's appVersion.
+  tag: ""
+  # Defaults to Always for "latest", IfNotPresent otherwise.
+  pullPolicy: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Migrations run on startup; keep at 1 unless you know what you are doing.
+replicaCount: 1
+
+# Application configuration (maps to the appsettings sections via env vars).
+config:
+  azureDevOps:
+    apiVersion: "7.1"
+  postgres:
+    host: ""            # required
+    port: 5432
+    database: azureadmin
+    username: azureadmin
+  keycloak:
+    authority: ""       # required, e.g. https://keycloak.example.com/realms/myrealm
+    clientId: ""        # required
+    requireHttpsMetadata: true
+
+# Secret values. Either let the chart create a Secret from the values below,
+# or point to an existing Secret (sealed-secrets, external-secrets, ...).
+secrets:
+  # Existing Secret with the keys: postgres-password, keycloak-client-secret
+  existingSecret: ""
+  postgresPassword: ""
+  keycloakClientSecret: ""
+
+# Honour X-Forwarded-Proto/-For from the ingress. Needed so the OIDC redirect
+# URI and the auth cookie use https when TLS terminates at the ingress.
+forwardedHeaders: true
+
+# Additional environment variables for the container.
+extraEnv: []
+# - name: Logging__LogLevel__Default
+#   value: Debug
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: azure-admin.example.com
+  tls:
+    enabled: false
+    secretName: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+# 1654 is the built-in non-root "app" user of the aspnet base image.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

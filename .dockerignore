@@ -3,6 +3,9 @@
 **/obj/
 
 # Frontend
+node_modules/
+dist/
+.angular/
 src/**/node_modules/
 src/**/dist/
 frontend/**/node_modules/

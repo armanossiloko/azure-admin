@@ -1,0 +1,7 @@
+apiVersion: v2
+name: azure-admin
+description: Azure DevOps admin tool (ASP.NET Core API + Angular SPA in a single image)
+type: application
+version: 0.1.0
+# Default image tag. Overridden with the release tag when the chart is published (see .github/workflows/build.yml).
+appVersion: latest

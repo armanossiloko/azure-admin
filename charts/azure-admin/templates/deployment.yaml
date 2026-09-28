@@ -1,0 +1,117 @@
+{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "azure-admin.fullname" . }}
+  labels:
+    {{- include "azure-admin.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "azure-admin.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "azure-admin.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "azure-admin.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: azure-admin
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default (ternary "Always" "IfNotPresent" (eq $tag "latest")) }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            {{- if .Values.forwardedHeaders }}
+            - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+              value: "true"
+            {{- end }}
+            - name: Postgres__Host
+              value: {{ required "config.postgres.host is required" .Values.config.postgres.host | quote }}
+            - name: Postgres__Port
+              value: {{ .Values.config.postgres.port | quote }}
+            - name: Postgres__Database
+              value: {{ .Values.config.postgres.database | quote }}
+            - name: Postgres__Username
+              value: {{ .Values.config.postgres.username | quote }}
+            - name: Postgres__Password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "azure-admin.secretName" . }}
+                  key: postgres-password
+            - name: AzureDevOps__ApiVersion
+              value: {{ .Values.config.azureDevOps.apiVersion | quote }}
+            - name: Keycloak__Authority
+              value: {{ required "config.keycloak.authority is required" .Values.config.keycloak.authority | quote }}
+            - name: Keycloak__ClientId
+              value: {{ required "config.keycloak.clientId is required" .Values.config.keycloak.clientId | quote }}
+            - name: Keycloak__ClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "azure-admin.secretName" . }}
+                  key: keycloak-client-secret
+            - name: Keycloak__RequireHttpsMetadata
+              value: {{ .Values.config.keycloak.requireHttpsMetadata | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # The API applies EF migrations before it starts listening, so give startup room.
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
