@@ -1,3 +1,4 @@
+using System.Reflection;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Services.AzureDevOps;
@@ -47,7 +48,22 @@ public sealed class NavigationController : ControllerBase
         await _notifications.SyncPatExpiryNotificationsAsync(cancellationToken);
         var unreadNotificationsCount = await _notifications.GetUnreadCountAsync(cancellationToken);
 
-        return Ok(new NavigationSummaryDto(organizations, activityPreview, unreadNotificationsCount));
+        return Ok(new NavigationSummaryDto(organizations, activityPreview, unreadNotificationsCount, GetAppVersion()));
+    }
+
+    /// <summary>Informational version from the published assembly (CI sets <c>-p:Version=…</c>).</summary>
+    private static string GetAppVersion()
+    {
+        var asm = typeof(Program).Assembly;
+        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        if (!string.IsNullOrWhiteSpace(info))
+        {
+            // SDK may append "+<commit>"; show the semver part only.
+            var plus = info.IndexOf('+');
+            return plus >= 0 ? info[..plus] : info;
+        }
+
+        return asm.GetName().Version?.ToString(3) ?? "dev";
     }
 
     private async Task<IReadOnlyList<DashboardActivityDto>> BuildActivityPreviewAsync(

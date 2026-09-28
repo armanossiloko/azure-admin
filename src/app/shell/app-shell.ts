@@ -36,6 +36,7 @@ type NavigationSummary = {
   organizations: NavigationOrganization[];
   activityPreview: DashboardActivityItem[];
   unreadNotificationsCount: number;
+  appVersion: string;
 };
 
 type NotificationItem = {

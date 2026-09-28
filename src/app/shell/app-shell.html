@@ -240,6 +240,9 @@
     </div>
 
     <div class="sidebar-footer">
+      @if (navigation()?.appVersion; as ver) {
+        <div class="sidebar-version" title="Azure Admin version">v{{ ver }}</div>
+      }
       <div
         class="org-switcher"
         #orgSwitcher

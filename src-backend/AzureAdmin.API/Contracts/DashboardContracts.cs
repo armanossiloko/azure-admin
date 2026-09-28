@@ -37,7 +37,9 @@ public sealed record DashboardActivityDto(
 public sealed record NavigationSummaryDto(
     IReadOnlyList<NavigationOrganizationDto> Organizations,
     IReadOnlyList<DashboardActivityDto> ActivityPreview,
-    int UnreadNotificationsCount);
+    int UnreadNotificationsCount,
+    /// <summary>App version from the assembly (set via Docker/CI <c>VERSION</c> build arg).</summary>
+    string AppVersion);
 
 public sealed record NavigationOrganizationDto(
     Guid Id,
