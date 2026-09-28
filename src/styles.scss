@@ -276,9 +276,12 @@ button { cursor: pointer; }
   width: calc(var(--sidebar-w) - var(--s-5));
   letter-spacing: var(--letter-tight);
 }
+/* Collapsed: keep the toggle and the brand mark, only the name goes away. A fixed width here squeezed the
+   mark out of the container and the search field painted over it. */
 .app[data-sidebar="collapsed"] .topbar-brand,
 .app[data-sidebar="icon"] .topbar-brand {
-  width: calc(var(--sidebar-w-collapsed) - var(--s-5));
+  width: auto;
+  flex-shrink: 0;
 }
 .brand-mark {
   width: 26px; height: 26px;
