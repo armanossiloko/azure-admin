@@ -20,6 +20,7 @@ public static class ApplicationServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<KeycloakUserProvisioner>();
         services.AddScoped<AzureDevOpsOrganizationService>();
         services.AddScoped<AzureDevOpsPatCredentialService>();
         services.AddScoped<IAzureDevOpsPatResolver, AzureDevOpsPatResolver>();

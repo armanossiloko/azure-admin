@@ -4,6 +4,7 @@ using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.DependencyInjection;
 using AzureAdmin.API.Models;
+using AzureAdmin.API.Services.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -100,51 +101,9 @@ builder.Services
             var principal = ctx.Principal
                 ?? throw new InvalidOperationException("OIDC token validated but Principal is null.");
 
-            var sub = principal.FindFirstValue("sub")
-                ?? throw new InvalidOperationException("OIDC token missing 'sub' claim.");
-
-            var userManager = ctx.HttpContext.RequestServices
-                .GetRequiredService<UserManager<ApplicationUser>>();
-
-            // Find existing local user by the Keycloak subject.
-            var user = await userManager.FindByLoginAsync("Keycloak", sub);
-
-            if (user is null)
-            {
-                // First login — provision a local ApplicationUser.
-                var email = principal.FindFirstValue("email")
-                    ?? principal.FindFirstValue(ClaimTypes.Email)
-                    ?? sub;
-
-                user = new ApplicationUser
-                {
-                    Id = Guid.NewGuid(),
-                    UserName = sub,
-                    Email = email,
-                    EmailConfirmed = true,
-                    DisplayName = principal.FindFirstValue("name")
-                        ?? principal.FindFirstValue("preferred_username"),
-                };
-
-                var create = await userManager.CreateAsync(user);
-                if (!create.Succeeded)
-                    throw new InvalidOperationException(
-                        $"Failed to create user for sub '{sub}': {string.Join(", ", create.Errors.Select(e => e.Description))}");
-
-                await userManager.AddLoginAsync(user, new UserLoginInfo("Keycloak", sub, "Keycloak"));
-            }
-            else
-            {
-                // Subsequent login — sync display name if it changed in Keycloak.
-                var freshName = principal.FindFirstValue("name")
-                    ?? principal.FindFirstValue("preferred_username");
-
-                if (freshName is not null && freshName != user.DisplayName)
-                {
-                    user.DisplayName = freshName;
-                    await userManager.UpdateAsync(user);
-                }
-            }
+            var user = await ctx.HttpContext.RequestServices
+                .GetRequiredService<KeycloakUserProvisioner>()
+                .GetOrCreateAsync(principal);
 
             // Replace the principal with a minimal, stable set of local claims.
             // The cookie stores only these; no Keycloak tokens are persisted.
