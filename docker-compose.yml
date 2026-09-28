@@ -26,6 +26,7 @@ services:
       Postgres__Database: ${POSTGRES_DB}
       Postgres__Username: ${POSTGRES_USER}
       Postgres__Password: ${POSTGRES_PASSWORD}
+      Postgres__SslMode: Disable # the compose postgres has no TLS; the app default is Require
       AzureDevOps__ApiVersion: ${AZURE_DEVOPS_API_VERSION}
       Keycloak__Authority: ${KEYCLOAK_AUTHORITY}
       Keycloak__ClientId: ${KEYCLOAK_CLIENT_ID}

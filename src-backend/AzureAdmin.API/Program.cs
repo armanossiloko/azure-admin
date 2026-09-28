@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,13 +32,9 @@ builder.Services.AddCors(options =>
             .AllowCredentials());
 });
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
 {
-    var pg = builder.Configuration
-        .GetSection(PostgresOptions.SectionName)
-        .Get<PostgresOptions>()
-        ?? throw new InvalidOperationException($"Missing '{PostgresOptions.SectionName}' configuration section.");
-
+    var pg = serviceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
     options.UseNpgsql(pg.ToConnectionString());
 });
 

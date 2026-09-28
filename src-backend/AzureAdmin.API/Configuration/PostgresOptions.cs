@@ -1,26 +1,41 @@
+using System.ComponentModel.DataAnnotations;
+using Npgsql;
+
 namespace AzureAdmin.API.Configuration;
 
 public sealed class PostgresOptions
 {
     public const string SectionName = "Postgres";
 
+    [Required]
     public required string Host { get; init; }
+
+    [Range(1, 65535)]
     public int Port { get; init; } = 5432;
+
+    [Required]
     public required string Database { get; init; }
+
+    [Required]
     public required string Username { get; init; }
+
+    [Required]
     public required string Password { get; init; }
 
     /// <summary>
-    /// Npgsql SSL Mode (Disable, Allow, Prefer, Require, VerifyCA, VerifyFull). Left empty, Npgsql's
-    /// default (Prefer) applies. Azure Database for PostgreSQL requires TLS: use Require or stricter.
+    /// TLS mode of the connection. Encrypted by default; set to Disable/Prefer only for a local database
+    /// without TLS. Require encrypts without validating the server certificate, VerifyCA/VerifyFull do.
     /// </summary>
-    public string? SslMode { get; init; }
+    public SslMode SslMode { get; init; } = SslMode.Require;
 
-    public string ToConnectionString()
-    {
-        var connectionString = $"Host={Host};Port={Port};Database={Database};Username={Username};Password={Password}";
-        return string.IsNullOrWhiteSpace(SslMode)
-            ? connectionString
-            : $"{connectionString};SSL Mode={SslMode}";
-    }
+    public string ToConnectionString() =>
+        new NpgsqlConnectionStringBuilder
+        {
+            Host = Host,
+            Port = Port,
+            Database = Database,
+            Username = Username,
+            Password = Password,
+            SslMode = SslMode,
+        }.ConnectionString;
 }
