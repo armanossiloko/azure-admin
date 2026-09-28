@@ -12,6 +12,16 @@ Admin app for **teams**, **registered Azure DevOps repositories**, **release tra
 
 The API calls Azure DevOps with each user’s stored PAT; there is no global ADO service account.
 
+## Container image
+
+Published to GitHub Container Registry: [`ghcr.io/armanossiloko/azure-admin`](https://github.com/armanossiloko/azure-admin/pkgs/container/azure-admin)
+
+```bash
+docker pull ghcr.io/armanossiloko/azure-admin:latest
+```
+
+Tags: `latest`, semantic versions (`1.2.3`), and `sha-<short>` from CI. Helm chart: see [`charts/azure-admin`](charts/azure-admin/README.md).
+
 ## Stack
 
 | Layer | Technology |
