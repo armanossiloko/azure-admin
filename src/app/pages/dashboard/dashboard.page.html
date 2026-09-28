@@ -62,7 +62,10 @@
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: var(--s-5); align-items: start">
+    <div
+      style="display: grid; gap: var(--s-5); align-items: start"
+      [style.grid-template-columns]="checklistComplete(d.checklist) ? '1fr' : '1.6fr 1fr'"
+    >
       <div class="card">
         <div class="card-header">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
@@ -137,106 +140,108 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          <div style="flex: 1">
-            <h3 class="card-title">Setup checklist</h3>
-            <p class="card-subtitle">Get started with Azure Admin</p>
+      @if (!checklistComplete(d.checklist)) {
+        <div class="card">
+          <div class="card-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <div style="flex: 1">
+              <h3 class="card-title">Setup checklist</h3>
+              <p class="card-subtitle">Get started with Azure Admin</p>
+            </div>
+            <span class="tag mono-tag">{{ checklistPercent(d.checklist) }}%</span>
           </div>
-          <span class="tag mono-tag">{{ checklistPercent(d.checklist) }}%</span>
-        </div>
-        <div class="card-body flush" style="padding: var(--s-3)">
-          <div class="checklist">
-            <div class="checklist-item">
-              <div class="ck-icon">
-                @if (d.checklist.hasAzureOrganization) {
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
+          <div class="card-body flush" style="padding: var(--s-3)">
+            <div class="checklist">
+              <div class="checklist-item">
+                <div class="ck-icon">
+                  @if (d.checklist.hasAzureOrganization) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  } @else {
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                  }
+                </div>
+                <div class="ck-body">
+                  <div class="t">Connect an Azure DevOps organization</div>
+                  <div class="d">Add your first organization to start managing releases.</div>
+                </div>
+                <button class="btn btn-sm btn-ghost" routerLink="/settings/azure-organizations">
+                  Open
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <polyline points="9 18 15 12 9 6"/>
                   </svg>
-                } @else {
-                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
-                }
+                </button>
               </div>
-              <div class="ck-body">
-                <div class="t">Connect an Azure DevOps organization</div>
-                <div class="d">Add your first organization to start managing releases.</div>
-              </div>
-              <button class="btn btn-sm btn-ghost" routerLink="/settings/azure-organizations">
-                Open
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
-            </div>
-            <div class="checklist-item">
-              <div class="ck-icon">
-                @if (d.checklist.hasTeam) {
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
+              <div class="checklist-item">
+                <div class="ck-icon">
+                  @if (d.checklist.hasTeam) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  } @else {
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                  }
+                </div>
+                <div class="ck-body">
+                  <div class="t">Create teams to scope your repos</div>
+                  <div class="d">Organize repositories into logical teams.</div>
+                </div>
+                <button class="btn btn-sm btn-ghost" routerLink="/teams">
+                  Open
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <polyline points="9 18 15 12 9 6"/>
                   </svg>
-                } @else {
-                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
-                }
+                </button>
               </div>
-              <div class="ck-body">
-                <div class="t">Create teams to scope your repos</div>
-                <div class="d">Organize repositories into logical teams.</div>
-              </div>
-              <button class="btn btn-sm btn-ghost" routerLink="/teams">
-                Open
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
-            </div>
-            <div class="checklist-item">
-              <div class="ck-icon">
-                @if (d.checklist.hasRegisteredRepository) {
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
+              <div class="checklist-item">
+                <div class="ck-icon">
+                  @if (d.checklist.hasRegisteredRepository) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  } @else {
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                  }
+                </div>
+                <div class="ck-body">
+                  <div class="t">Register repositories to teams</div>
+                  <div class="d">Connect your Azure DevOps repositories.</div>
+                </div>
+                <button class="btn btn-sm btn-ghost" routerLink="/repositories">
+                  Open
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <polyline points="9 18 15 12 9 6"/>
                   </svg>
-                } @else {
-                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
-                }
+                </button>
               </div>
-              <div class="ck-body">
-                <div class="t">Register repositories to teams</div>
-                <div class="d">Connect your Azure DevOps repositories.</div>
-              </div>
-              <button class="btn btn-sm btn-ghost" routerLink="/repositories">
-                Open
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
-            </div>
-            <div class="checklist-item">
-              <div class="ck-icon">
-                @if (d.checklist.hasRelease) {
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
+              <div class="checklist-item">
+                <div class="ck-icon">
+                  @if (d.checklist.hasRelease) {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  } @else {
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
+                  }
+                </div>
+                <div class="ck-body">
+                  <div class="t">Open your first release</div>
+                  <div class="d">Group PRs across repos and open them as one batch.</div>
+                </div>
+                <button class="btn btn-sm btn-ghost" routerLink="/releases/new">
+                  Start
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                    <polyline points="9 18 15 12 9 6"/>
                   </svg>
-                } @else {
-                  <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--bg-4)"></span>
-                }
+                </button>
               </div>
-              <div class="ck-body">
-                <div class="t">Open your first release</div>
-                <div class="d">Group PRs across repos and open them as one batch.</div>
-              </div>
-              <button class="btn btn-sm btn-ghost" routerLink="/releases/new">
-                Start
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
             </div>
           </div>
         </div>
-      </div>
+      }
     </div>
 
     <div class="section" style="margin-top: var(--s-7)">

@@ -75,6 +75,11 @@ export class DashboardPage implements OnInit {
     }
   }
 
+  /** Once every setup step is done the checklist is hidden. */
+  protected checklistComplete(c: DashboardChecklist): boolean {
+    return c.hasAzureOrganization && c.hasTeam && c.hasRegisteredRepository && c.hasRelease;
+  }
+
   protected checklistPercent(c: DashboardChecklist): number {
     const n = [c.hasAzureOrganization, c.hasTeam, c.hasRegisteredRepository, c.hasRelease].filter(Boolean).length;
     return Math.round((n / 4) * 100);
