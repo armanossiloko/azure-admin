@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { SelectedOrgService } from '../../services/selected-org.service';
+import { SettingsService } from '../../services/settings.service';
 import { Component, computed, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -97,6 +98,7 @@ export class ReleaseCreatePage implements OnInit {
   }
 
   protected readonly selectedOrg = inject(SelectedOrgService);
+  private readonly settingsService = inject(SettingsService);
 
   constructor(
     private readonly http: HttpClient,
@@ -112,9 +114,26 @@ export class ReleaseCreatePage implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.loadTeams();
     const releaseId = this.route.snapshot.paramMap.get('releaseId');
+    if (!releaseId) void this.applySprintSize();
+    await this.loadTeams();
     if (releaseId) await this.loadExistingReleaseForBatch(releaseId);
+  }
+
+  /** A release is created at the end of a sprint, so the default label is the week the sprint started. */
+  private async applySprintSize(): Promise<void> {
+    try {
+      const { sprintWeeks } = await firstValueFrom(this.settingsService.getSettings());
+      if (!sprintWeeks || sprintWeeks < 0) return;
+
+      const current = this.defaultSprintLabel();
+      const label = this.defaultSprintLabel(sprintWeeks);
+      // Only replace the untouched defaults, never something the user has already typed.
+      if (this.sprintLabel() === current) this.sprintLabel.set(label);
+      if (this.releaseTitle() === `Release sprint ${current}`) this.releaseTitle.set(`Release sprint ${label}`);
+    } catch {
+      // Keep the current-week default when the settings cannot be loaded.
+    }
   }
 
   private async loadExistingReleaseForBatch(id: string): Promise<void> {
@@ -360,9 +379,10 @@ export class ReleaseCreatePage implements OnInit {
     );
   }
 
-  private defaultSprintLabel(): string {
+  /** ISO calendar week label (yyyy/ww), `weeksBack` weeks before today (handles year boundaries). */
+  private defaultSprintLabel(weeksBack = 0): string {
     const now = new Date();
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - weeksBack * 7));
     const day = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - day);
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));

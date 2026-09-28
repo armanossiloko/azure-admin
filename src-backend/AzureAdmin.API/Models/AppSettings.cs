@@ -13,6 +13,12 @@ public sealed class AppSettings
     /// <summary>Comma-separated list of group names to exclude from release notes, e.g. "Chores,Other".</summary>
     public string? ExcludedGroups { get; set; }
 
+    /// <summary>
+    /// Sprint size in weeks. The default sprint label of a new release is the calendar week this many weeks
+    /// back, because a release is created at the end of a sprint. 0 uses the current week.
+    /// </summary>
+    public int SprintWeeks { get; set; }
+
     // Jira
     public bool JiraEnabled { get; set; }
     public string? JiraBaseUrl { get; set; }

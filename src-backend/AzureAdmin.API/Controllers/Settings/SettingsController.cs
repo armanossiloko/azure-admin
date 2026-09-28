@@ -12,6 +12,8 @@ namespace AzureAdmin.API.Controllers.Settings;
 [Route("api/settings")]
 public sealed class SettingsController : ControllerBase
 {
+    private const int MaxSprintWeeks = 52;
+
     private readonly ApplicationDbContext _db;
 
     public SettingsController(ApplicationDbContext db) => _db = db;
@@ -32,6 +34,9 @@ public sealed class SettingsController : ControllerBase
         [FromBody] UpdateAppSettingsRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.SprintWeeks is < 0 or > MaxSprintWeeks)
+            return BadRequest(new { message = $"Sprint size must be between 0 and {MaxSprintWeeks} weeks." });
+
         var settings = await _db.AppSettings
             .FirstOrDefaultAsync(s => s.Id == AppSettings.SingletonId, cancellationToken);
 
@@ -46,6 +51,8 @@ public sealed class SettingsController : ControllerBase
         settings.ExcludedGroups = request.ExcludedGroups?.Count > 0
             ? string.Join(',', request.ExcludedGroups.Select(g => g.Trim()).Where(g => !string.IsNullOrEmpty(g)))
             : null;
+        if (request.SprintWeeks is { } sprintWeeks)
+            settings.SprintWeeks = sprintWeeks;
         settings.JiraEnabled = request.JiraEnabled;
         settings.JiraBaseUrl = string.IsNullOrWhiteSpace(request.JiraBaseUrl) ? null : request.JiraBaseUrl.Trim();
         settings.JiraProjectKey = string.IsNullOrWhiteSpace(request.JiraProjectKey)
@@ -60,6 +67,7 @@ public sealed class SettingsController : ControllerBase
         s.ConventionalCommitsEnabled,
         s.ConventionalCommitsUseEmojis,
         s.GetExcludedGroupsSet().ToList(),
+        s.SprintWeeks,
         s.JiraEnabled,
         s.JiraBaseUrl,
         s.JiraProjectKey);

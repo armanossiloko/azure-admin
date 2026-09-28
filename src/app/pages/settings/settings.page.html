@@ -104,6 +104,42 @@
     </div>
   </div>
 
+  <!-- Sprints -->
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <div>
+        <h3 class="card-title">Sprints</h3>
+        <p class="card-subtitle">Control how new releases are named.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <label for="sprintWeeks" style="display: block; font-size: 13px; font-weight: 500; margin-bottom: var(--s-1)">
+        Sprint size (weeks)
+      </label>
+      <input
+        id="sprintWeeks"
+        type="number"
+        class="input"
+        min="0"
+        max="52"
+        step="1"
+        [(ngModel)]="form.sprintWeeks"
+        style="max-width: 120px"
+      >
+      <div class="muted" style="font-size: 12px; margin-top: var(--s-1)">
+        A release is created at the end of a sprint, so the default sprint label (e.g. <code style="font-size: 11px">2026/41</code>)
+        is the calendar week this many weeks back. With <code style="font-size: 11px">3</code> in calendar week 44 the label is
+        <code style="font-size: 11px">2026/41</code>. <code style="font-size: 11px">0</code> uses the current calendar week.
+      </div>
+    </div>
+  </div>
+
   <!-- Jira Integration -->
   <div class="card">
     <div class="card-header">

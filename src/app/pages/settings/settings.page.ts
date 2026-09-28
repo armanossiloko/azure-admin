@@ -36,6 +36,7 @@ export class SettingsPage implements OnInit {
     conventionalCommitsEnabled: false,
     conventionalCommitsUseEmojis: true,
     excludedGroups: [],
+    sprintWeeks: 0,
     jiraEnabled: false,
     jiraBaseUrl: null,
     jiraProjectKey: null

@@ -6,6 +6,7 @@ export type AppSettings = {
   conventionalCommitsEnabled: boolean;
   conventionalCommitsUseEmojis: boolean;
   excludedGroups: string[];
+  sprintWeeks: number;
   jiraEnabled: boolean;
   jiraBaseUrl: string | null;
   jiraProjectKey: string | null;
