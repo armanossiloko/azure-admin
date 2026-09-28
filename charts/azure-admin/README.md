@@ -9,9 +9,14 @@ Both are built by `.github/workflows/build.yml`:
 
 | Trigger | Image tags (`ghcr.io/<owner>/azure-admin`) | Chart |
 |---|---|---|
-| push to `master` | `sha-<short>`, `latest` | linted only |
-| tag `v1.2.3` | `sha-<short>`, `1.2.3` | pushed to `oci://ghcr.io/<owner>/charts/azure-admin` as version `1.2.3` (default image tag `1.2.3`) |
+| push to `master` with `feat`/`fix`/breaking commits | `sha-<short>`, `latest`, `<new version>` | pushed to `oci://ghcr.io/<owner>/charts/azure-admin` as the new version (default image tag = same version) |
+| push to `master` with only `chore`/`docs`/`ci` commits | `sha-<short>`, `latest` | pushed as `<last release>-master.<run>.<short>` (default image tag `sha-<short>`) |
 | pull request | built, not pushed | linted only |
+
+The version is calculated by [semantic-release](https://semantic-release.gitbook.io) from the
+[Conventional Commits](https://www.conventionalcommits.org) since the last release: `fix:` -> patch,
+`feat:` -> minor, `feat!:` or a `BREAKING CHANGE:` footer -> major. The first release is `1.0.0`.
+The git tag (`v1.2.3`) is the only source of the version; `Chart.yaml` and `package.json` hold placeholders.
 
 ## Required values
 

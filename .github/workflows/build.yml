@@ -1,28 +1,67 @@
 name: build
 
+# Every push to master runs semantic-release (conventional commits -> next version, git tag,
+# GitHub release), then builds the image and publishes the chart with that version.
+# Everything is one workflow because tags created with GITHUB_TOKEN do not trigger other workflows.
+
 on:
   push:
     branches: [master]
-    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes semantic-release@25
+
+      # Empty when there was nothing to release (only chore/docs/ci commits). Reading the tag on HEAD
+      # (instead of parsing semantic-release output) also makes re-runs of this workflow work.
+      - name: Resolve released version
+        id: version
+        run: |
+          git fetch --tags --force
+          tag="$(git tag --points-at HEAD --list 'v[0-9]*' | sort -V | tail -1)"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
   image:
+    needs: release
+    if: ${{ !cancelled() && needs.release.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Log in to ghcr.io
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -30,56 +69,73 @@ jobs:
 
       # metadata-action lowercases the image name (ghcr.io requires it).
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha
-            type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.version != '' }}
             type=ref,event=pr
+          labels: |
+            org.opencontainers.image.version=${{ needs.release.outputs.version || github.sha }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.release.outputs.version || '0.0.0-dev' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   chart-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - run: helm lint charts/azure-admin -f charts/azure-admin/ci/test-values.yaml
 
       - run: helm template azure-admin charts/azure-admin -f charts/azure-admin/ci/test-values.yaml > /dev/null
 
-  # Only on release tags (v1.2.3): chart version and appVersion (= default image tag)
-  # are both set to the tag, so a chart version always pulls the matching image.
+  # Publishes the chart to ghcr.io on every push to master, never on PRs.
+  # appVersion is the default image tag, so a chart version always pulls the matching image:
+  #   release 1.2.3       -> chart 1.2.3,                      image 1.2.3
+  #   no release (chore)  -> chart 1.2.3-master.<run>.<sha>,   image sha-<sha>   (1.2.3 = last release)
   chart-publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [image, chart-lint]
+    needs: [release, image, chart-lint]
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.image.result == 'success' && needs.chart-lint.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - name: Package and push chart
         env:
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          sha="${GITHUB_SHA::7}"
+          if [ -n "$RELEASE_VERSION" ]; then
+            version="$RELEASE_VERSION"
+            app_version="$RELEASE_VERSION"
+          else
+            base="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || echo v0.0.0)"
+            version="${base#v}-master.${GITHUB_RUN_NUMBER}.${sha}"
+            app_version="sha-${sha}"
+          fi
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "$REGISTRY_PASSWORD" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm package charts/azure-admin --version "$version" --app-version "$version" -d dist
+          helm package charts/azure-admin --version "$version" --app-version "$app_version" -d dist
           helm push "dist/azure-admin-${version}.tgz" "oci://ghcr.io/${owner}/charts"
