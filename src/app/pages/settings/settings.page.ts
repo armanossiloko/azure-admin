@@ -39,8 +39,10 @@ export class SettingsPage implements OnInit {
     sprintWeeks: 0,
     jiraEnabled: false,
     jiraBaseUrl: null,
-    jiraProjectKey: null
+    jiraProjectKeys: []
   };
+
+  protected jiraProjectKeyDraft = '';
 
   constructor(private readonly settingsService: SettingsService) {}
 
@@ -49,7 +51,12 @@ export class SettingsPage implements OnInit {
     this.error.set(null);
     try {
       const settings = await firstValueFrom(this.settingsService.getSettings());
-      this.form = { ...settings, excludedGroups: settings.excludedGroups ?? [] };
+      // Existing installs with a single stored key arrive as a one-element list.
+      this.form = {
+        ...settings,
+        excludedGroups: settings.excludedGroups ?? [],
+        jiraProjectKeys: settings.jiraProjectKeys ?? []
+      };
     } catch {
       this.error.set('Failed to load settings.');
     } finally {
@@ -71,13 +78,47 @@ export class SettingsPage implements OnInit {
     this.form = { ...this.form, excludedGroups: [...excluded] };
   }
 
+  protected addJiraProjectKey(): void {
+    const key = this.jiraProjectKeyDraft.trim().toUpperCase();
+    if (!key) return;
+
+    const existing = this.form.jiraProjectKeys ?? [];
+    if (existing.some((k) => k.toUpperCase() === key)) {
+      this.jiraProjectKeyDraft = '';
+      return;
+    }
+
+    this.form = { ...this.form, jiraProjectKeys: [...existing, key] };
+    this.jiraProjectKeyDraft = '';
+  }
+
+  protected removeJiraProjectKey(key: string): void {
+    this.form = {
+      ...this.form,
+      jiraProjectKeys: (this.form.jiraProjectKeys ?? []).filter((k) => k !== key)
+    };
+  }
+
+  protected onJiraProjectKeyKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.addJiraProjectKey();
+    }
+  }
+
   protected async save(): Promise<void> {
     this.saving.set(true);
     this.error.set(null);
     this.saved.set(false);
     try {
+      // Flush any draft key the user typed but did not click Add for.
+      this.addJiraProjectKey();
       const updated = await firstValueFrom(this.settingsService.updateSettings(this.form));
-      this.form = { ...updated, excludedGroups: updated.excludedGroups ?? [] };
+      this.form = {
+        ...updated,
+        excludedGroups: updated.excludedGroups ?? [],
+        jiraProjectKeys: updated.jiraProjectKeys ?? []
+      };
       this.saved.set(true);
       setTimeout(() => this.saved.set(false), 3000);
     } catch {

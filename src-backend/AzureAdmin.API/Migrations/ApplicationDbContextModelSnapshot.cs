@@ -95,8 +95,8 @@ namespace AzureAdmin.API.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("JiraProjectKey")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
                     b.Property<int>("SprintWeeks")
                         .HasColumnType("integer");

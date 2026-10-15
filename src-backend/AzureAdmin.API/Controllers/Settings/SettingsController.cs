@@ -55,20 +55,50 @@ public sealed class SettingsController : ControllerBase
             settings.SprintWeeks = sprintWeeks;
         settings.JiraEnabled = request.JiraEnabled;
         settings.JiraBaseUrl = string.IsNullOrWhiteSpace(request.JiraBaseUrl) ? null : request.JiraBaseUrl.Trim();
-        settings.JiraProjectKey = string.IsNullOrWhiteSpace(request.JiraProjectKey)
-            ? null
-            : request.JiraProjectKey.Trim().ToUpperInvariant();
+
+        // Prefer the new list; fall back to the legacy single string; leave unchanged if neither was sent
+        // so an older client / partial payload cannot wipe an existing key.
+        if (request.JiraProjectKeys is not null)
+            settings.JiraProjectKey = SerializeProjectKeys(request.JiraProjectKeys);
+        else if (request.JiraProjectKey is not null)
+            settings.JiraProjectKey = SerializeProjectKeys(ParseProjectKeys(request.JiraProjectKey));
 
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ToDto(settings));
     }
 
-    private static AppSettingsDto ToDto(AppSettings s) => new(
-        s.ConventionalCommitsEnabled,
-        s.ConventionalCommitsUseEmojis,
-        s.GetExcludedGroupsSet().ToList(),
-        s.SprintWeeks,
-        s.JiraEnabled,
-        s.JiraBaseUrl,
-        s.JiraProjectKey);
+    private static AppSettingsDto ToDto(AppSettings s)
+    {
+        var keys = s.GetJiraProjectKeys();
+        return new(
+            s.ConventionalCommitsEnabled,
+            s.ConventionalCommitsUseEmojis,
+            s.GetExcludedGroupsSet().ToList(),
+            s.SprintWeeks,
+            s.JiraEnabled,
+            s.JiraBaseUrl,
+            keys,
+            // Legacy field: same stored value (single key, or comma-joined). Old SPAs bind this to one input.
+            s.JiraProjectKey);
+    }
+
+    private static IReadOnlyList<string> ParseProjectKeys(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',')
+                .Select(k => k.Trim().ToUpperInvariant())
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Distinct()
+                .ToList();
+
+    private static string? SerializeProjectKeys(IEnumerable<string> keys)
+    {
+        var normalized = keys
+            .Select(k => k.Trim().ToUpperInvariant())
+            .Where(k => !string.IsNullOrEmpty(k))
+            .Distinct()
+            .ToList();
+
+        return normalized.Count > 0 ? string.Join(',', normalized) : null;
+    }
 }

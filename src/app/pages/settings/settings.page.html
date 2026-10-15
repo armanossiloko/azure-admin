@@ -169,17 +169,45 @@
 
           <div>
             <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: var(--s-1)">
-              Project key
+              Project keys
             </label>
-            <input
-              type="text"
-              class="input"
-              [(ngModel)]="form.jiraProjectKey"
-              placeholder="e.g. BB_DEV"
-              style="max-width: 220px"
-            >
+            @if (form.jiraProjectKeys.length) {
+              <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2)">
+                @for (key of form.jiraProjectKeys; track key) {
+                  <span
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-2); font-size: 12.5px; font-weight: 500"
+                  >
+                    {{ key }}
+                    <button
+                      type="button"
+                      (click)="removeJiraProjectKey(key)"
+                      aria-label="Remove {{ key }}"
+                      style="display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 0; line-height: 1"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </span>
+                }
+              </div>
+            }
+            <div style="display: flex; gap: var(--s-2); align-items: center; max-width: 360px">
+              <input
+                type="text"
+                class="input"
+                [(ngModel)]="jiraProjectKeyDraft"
+                (keydown)="onJiraProjectKeyKeydown($event)"
+                placeholder="e.g. BB_DEV"
+                style="flex: 1; min-width: 0"
+              >
+              <button type="button" class="btn" (click)="addJiraProjectKey()" [disabled]="!jiraProjectKeyDraft.trim()">
+                Add
+              </button>
+            </div>
             <div class="muted" style="font-size: 12px; margin-top: var(--s-1)">
-              The prefix used in your ticket numbers — e.g. <code style="font-size: 11px">BB_DEV</code> matches <code style="font-size: 11px">BB_DEV-1234</code>
+              Prefixes used in ticket numbers — e.g. <code style="font-size: 11px">BB_DEV</code> matches <code style="font-size: 11px">BB_DEV-1234</code>. Add one entry per project key.
             </div>
           </div>
 

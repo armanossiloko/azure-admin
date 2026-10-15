@@ -353,11 +353,12 @@ public sealed class ReleasesController : ControllerBase
             var parsed = _commitParser.Parse(c.Comment);
 
             IReadOnlyList<JiraTicketRefDto> jiraRefs = [];
+            var projectKeys = settings.GetJiraProjectKeys();
             if (settings.JiraEnabled
-                && !string.IsNullOrEmpty(settings.JiraProjectKey)
+                && projectKeys.Count > 0
                 && !string.IsNullOrEmpty(settings.JiraBaseUrl))
             {
-                var keys = _jiraExtractor.ExtractKeys(c.Comment, settings.JiraProjectKey);
+                var keys = _jiraExtractor.ExtractKeys(c.Comment, projectKeys);
                 jiraRefs = keys
                     .Select(k => new JiraTicketRefDto(k, $"{settings.JiraBaseUrl!.TrimEnd('/')}/browse/{k}"))
                     .ToList();

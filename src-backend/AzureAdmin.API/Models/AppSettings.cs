@@ -22,6 +22,8 @@ public sealed class AppSettings
     // Jira
     public bool JiraEnabled { get; set; }
     public string? JiraBaseUrl { get; set; }
+
+    /// <summary>Comma-separated Jira project key prefixes, e.g. "BB_DEV,PLATFORM".</summary>
     public string? JiraProjectKey { get; set; }
 
     public IReadOnlySet<string> GetExcludedGroupsSet() =>
@@ -31,4 +33,13 @@ public sealed class AppSettings
                 .Select(g => g.Trim())
                 .Where(g => !string.IsNullOrEmpty(g))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyList<string> GetJiraProjectKeys() =>
+        string.IsNullOrWhiteSpace(JiraProjectKey)
+            ? []
+            : JiraProjectKey.Split(',')
+                .Select(k => k.Trim().ToUpperInvariant())
+                .Where(k => !string.IsNullOrEmpty(k))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 }
