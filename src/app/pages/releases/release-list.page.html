@@ -34,6 +34,29 @@
     </div>
   }
 
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-body" style="display: flex; gap: var(--s-3); align-items: end; flex-wrap: wrap">
+      <div class="field" style="margin: 0; min-width: 180px">
+        <label class="field-label" for="status-filter">Status</label>
+        <select
+          id="status-filter"
+          class="select"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+        >
+          <option value="">All</option>
+          <option value="Draft">Draft</option>
+          <option value="Active">Active</option>
+          <option value="Completed">Completed</option>
+          <option value="Archived">Archived</option>
+        </select>
+      </div>
+      <p class="muted" style="font-size: 12.5px; margin: 0 0 6px">
+        Scoped to the organization selected in the sidebar when one is set.
+      </p>
+    </div>
+  </div>
+
   @if (rows().length) {
     <div class="card">
       <div class="card-body flush">
@@ -53,7 +76,7 @@
                 <td style="font-weight: 500">{{ r.title }}</td>
                 <td class="mono">{{ r.sprintLabel || '—' }}</td>
                 <td>
-                  <span class="badge draft">{{ r.status }}</span>
+                  <span [class]="statusBadgeClass(r.status)">{{ r.status }}</span>
                 </td>
                 <td class="muted">{{ r.createdAt | date: 'medium' }}</td>
                 <td class="actions" (click)="$event.stopPropagation()">

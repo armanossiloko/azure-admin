@@ -36,6 +36,20 @@ type BatchCreateResponse = {
   skippedDecommissionedRepositories?: string[];
 };
 
+type BatchPreflightRepoResult = {
+  registeredRepositoryId: string;
+  repositoryIdOrName: string;
+  serviceName: string | null;
+  ok: boolean;
+  issues: string[];
+};
+
+type BatchPreflightResponse = {
+  canProceed: boolean;
+  repositories: BatchPreflightRepoResult[];
+  skippedDecommissionedRepositories: string[];
+};
+
 type ReleasePrPhase = 'DevToMaster' | 'MasterToProd';
 
 type ReleaseForBatchContext = {
@@ -68,6 +82,7 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly created = signal<BatchCreateResponse | null>(null);
   protected readonly skippedDecommissioned = signal<string[]>([]);
+  protected readonly preflightIssues = signal<string[]>([]);
 
   /** When set, PRs are added to this release directly (no find-or-create). */
   protected readonly existingRelease = signal<ReleaseForBatchContext | null>(null);
@@ -273,6 +288,7 @@ export class ReleaseCreatePage implements OnInit {
     this.error.set(null);
     this.created.set(null);
     this.skippedDecommissioned.set([]);
+    this.preflightIssues.set([]);
 
     const included = [...this.includedTeamIds()];
     if (!included.length) {
@@ -332,6 +348,43 @@ export class ReleaseCreatePage implements OnInit {
 
       const teamErrors: string[] = [];
       const skipped: string[] = [];
+      const blocking: string[] = [];
+
+      for (const tid of included) {
+        const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id => {
+          const repo = this.reposForTeam(tid).find(r => r.id === id);
+          return !repo?.isDecommissioned;
+        });
+        if (!ids.length) continue;
+
+        const teamName = this.teams().find(t => t.id === tid)?.name ?? tid;
+        const body = { ...batchBase, registeredRepositoryIds: ids };
+
+        try {
+          const preflight = await firstValueFrom(
+            this.http.post<BatchPreflightResponse>(
+              `/api/releases/${releaseId}/teams/${tid}/pull-requests/preflight`,
+              body
+            )
+          );
+
+          for (const repo of preflight.repositories ?? []) {
+            if (!repo.ok) {
+              for (const issue of repo.issues ?? []) {
+                blocking.push(`${teamName} / ${repo.serviceName || repo.repositoryIdOrName}: ${issue}`);
+              }
+            }
+          }
+        } catch (e: unknown) {
+          blocking.push(`${teamName}: preflight failed — ${this.prettyError(e)}`);
+        }
+      }
+
+      if (blocking.length) {
+        this.preflightIssues.set(blocking);
+        this.error.set('Preflight found problems. Fix them before opening pull requests.');
+        return;
+      }
 
       for (const tid of included) {
         const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id => {

@@ -6,12 +6,28 @@
         <span style="color: var(--text-4); font-size: 13px">/</span>
         <span style="color: var(--text-2); font-size: 13px">Detail</span>
       </div>
-      <h1 class="page-title">{{ rel.title }}</h1>
-      <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
-        <span class="badge draft">{{ rel.status }}</span>
-        <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
-        <span>· Created {{ rel.createdAt | date: 'medium' }}</span>
-      </div>
+      @if (editingMeta()) {
+        <div style="display: grid; gap: var(--s-2); max-width: 480px">
+          <input class="input" [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" placeholder="Release title" />
+          <input class="input mono" [ngModel]="editSprint()" (ngModelChange)="editSprint.set($event)" placeholder="Sprint label" />
+          <div style="display: flex; gap: var(--s-2)">
+            <button type="button" class="btn btn-primary btn-sm" (click)="saveMeta()" [disabled]="savingMeta()">
+              {{ savingMeta() ? 'Saving…' : 'Save' }}
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelEditMeta()" [disabled]="savingMeta()">Cancel</button>
+          </div>
+        </div>
+      } @else {
+        <h1 class="page-title">{{ rel.title }}</h1>
+        <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
+          <span class="badge draft">{{ rel.status }}</span>
+          <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
+          <span>· Created {{ rel.createdAt | date: 'medium' }}</span>
+          @if (!isReleaseClosed(rel.status) || (rel.status || '').toLowerCase() === 'completed') {
+            <button type="button" class="btn btn-sm btn-ghost" (click)="startEditMeta()">Edit</button>
+          }
+        </div>
+      }
     </div>
     <div class="actions" style="display: flex; gap: var(--s-2); align-items: flex-start">
       @if (!isReleaseClosed(rel.status)) {
@@ -21,6 +37,11 @@
             <polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
           {{ closingRelease() ? 'Closing…' : 'Close release' }}
+        </button>
+      }
+      @if ((rel.status || '').toLowerCase() !== 'archived') {
+        <button type="button" class="btn btn-ghost" (click)="archiveRelease()" [disabled]="closingRelease()">
+          Archive
         </button>
       }
       @if (!isReleaseClosed(rel.status)) {
@@ -173,6 +194,15 @@
                               <line x1="10" y1="14" x2="21" y2="3"/>
                             </svg>
                           </a>
+                          <button
+                            type="button"
+                            class="btn btn-sm btn-danger-ghost"
+                            (click)="removePullRequest(pr)"
+                            [disabled]="removingPrId() === pr.id"
+                            title="Remove from this release"
+                          >
+                            {{ removingPrId() === pr.id ? 'Removing…' : 'Remove' }}
+                          </button>
                         </td>
                       </tr>
                     </tbody>

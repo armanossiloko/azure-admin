@@ -11,6 +11,14 @@ public sealed record ReleaseSummaryDto(
 
 public sealed record CreateReleaseRequest(string Title, string? SprintLabel);
 
+/// <param name="Title">When null, title is left unchanged.</param>
+/// <param name="SprintLabel">When null, sprint is left unchanged. Empty string clears it.</param>
+/// <param name="Status">Optional lifecycle transition (e.g. Archive).</param>
+public sealed record UpdateReleaseRequest(
+    string? Title = null,
+    string? SprintLabel = null,
+    ReleaseLifecycleStatus? Status = null);
+
 public sealed record ReleaseDetailDto(
     Guid Id,
     string Title,
@@ -54,6 +62,18 @@ public sealed record BatchCreateReleasePullRequestsResponse(
     IReadOnlyList<string> SkippedDecommissionedRepositories);
 
 public sealed record CreatedPullRequestResult(string RepositoryIdOrName, int PullRequestId, string Url);
+
+public sealed record BatchPreflightResponse(
+    bool CanProceed,
+    IReadOnlyList<BatchPreflightRepoResult> Repositories,
+    IReadOnlyList<string> SkippedDecommissionedRepositories);
+
+public sealed record BatchPreflightRepoResult(
+    Guid RegisteredRepositoryId,
+    string RepositoryIdOrName,
+    string? ServiceName,
+    bool Ok,
+    IReadOnlyList<string> Issues);
 
 public sealed record AddTeamToReleaseRequest(Guid TeamId);
 

@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
+import { SelectedOrgService } from '../../services/selected-org.service';
 
 type DashboardStats = {
   activeReleasesCount: number;
@@ -49,23 +50,33 @@ type DashboardResponse = {
   imports: [CommonModule, RouterLink],
   templateUrl: './dashboard.page.html'
 })
-export class DashboardPage implements OnInit {
+export class DashboardPage {
   protected readonly auth = inject(AuthService);
   private readonly http = inject(HttpClient);
+  private readonly selectedOrg = inject(SelectedOrgService);
 
   protected readonly data = signal<DashboardResponse | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
-  async ngOnInit(): Promise<void> {
-    await this.reload();
+  constructor() {
+    effect(() => {
+      this.selectedOrg.selectedOrgId();
+      void this.reload();
+    });
   }
 
   protected async reload(): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const res = await firstValueFrom(this.http.get<DashboardResponse>('/api/dashboard'));
+      const params: Record<string, string> = {};
+      const orgId = this.selectedOrg.selectedOrgId();
+      if (orgId) params['organizationId'] = orgId;
+
+      const res = await firstValueFrom(
+        this.http.get<DashboardResponse>('/api/dashboard', { params })
+      );
       this.data.set(res);
     } catch {
       this.error.set('Could not load dashboard. Try again in a moment.');
@@ -97,7 +108,7 @@ export class DashboardPage implements OnInit {
 
   protected attentionDelta(s: DashboardStats): string {
     if (s.pullRequestsNeedingAttentionCount === 0) return 'All clear';
-    return 'On draft releases';
+    return 'Open on draft/active';
   }
 
   protected reposDelta(s: DashboardStats): string {

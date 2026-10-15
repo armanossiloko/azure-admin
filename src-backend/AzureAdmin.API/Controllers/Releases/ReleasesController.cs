@@ -2,6 +2,7 @@ using System.Net.Http;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
+using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Releases;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,7 @@ public sealed class ReleasesController : ControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly ConventionalCommitParser _commitParser;
     private readonly JiraReferenceExtractor _jiraExtractor;
+    private readonly OrganizationScopeService _orgScope;
 
     public ReleasesController(
         ApplicationDbContext db,
@@ -28,7 +30,8 @@ public sealed class ReleasesController : ControllerBase
         ReleaseCommitNotesService commitNotes,
         ICurrentUser currentUser,
         ConventionalCommitParser commitParser,
-        JiraReferenceExtractor jiraExtractor)
+        JiraReferenceExtractor jiraExtractor,
+        OrganizationScopeService orgScope)
     {
         _db = db;
         _batchService = batchService;
@@ -36,13 +39,45 @@ public sealed class ReleasesController : ControllerBase
         _currentUser = currentUser;
         _commitParser = commitParser;
         _jiraExtractor = jiraExtractor;
+        _orgScope = orgScope;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ReleaseSummaryDto>>> List(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<ReleaseSummaryDto>>> List(
+        [FromQuery] Guid? organizationId,
+        [FromQuery] ReleaseLifecycleStatus? status,
+        [FromQuery] string? sprintLabel,
+        CancellationToken cancellationToken)
     {
-        var rows = await _db.Releases
-            .AsNoTracking()
+        var query = _db.Releases.AsNoTracking().AsQueryable();
+
+        if (organizationId is { } orgId)
+        {
+            try
+            {
+                var scope = await _orgScope.ResolveAsync(orgId, _currentUser.GetRequiredUserId(), cancellationToken);
+                if (scope is null)
+                    return BadRequest(new { message = "Organization was not found." });
+
+                var matchingIds = await _orgScope.GetMatchingReleaseIdsAsync(scope, cancellationToken);
+                query = query.Where(r => matchingIds.Contains(r.Id));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        if (status is { } st)
+            query = query.Where(r => r.Status == st);
+
+        if (!string.IsNullOrWhiteSpace(sprintLabel))
+        {
+            var sprint = sprintLabel.Trim();
+            query = query.Where(r => r.SprintLabel != null && EF.Functions.ILike(r.SprintLabel, sprint));
+        }
+
+        var rows = await query
             .OrderByDescending(r => r.CreatedAt)
             .Select(r => new ReleaseSummaryDto(r.Id, r.Title, r.SprintLabel, r.Status, r.CreatedAt))
             .ToListAsync(cancellationToken);
@@ -204,6 +239,33 @@ public sealed class ReleasesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = entity.Id }, dto);
     }
 
+    [HttpPost("{releaseId:guid}/teams/{teamId:guid}/pull-requests/preflight")]
+    public async Task<ActionResult<BatchPreflightResponse>> PreflightPullRequests(
+        Guid releaseId,
+        Guid teamId,
+        [FromBody] BatchCreateReleasePullRequestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var results = await _batchService.PreflightPullRequestsForReleaseAsync(
+                releaseId,
+                teamId,
+                request,
+                cancellationToken);
+
+            return Ok(results);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost("{releaseId:guid}/teams/{teamId:guid}/pull-requests/batch")]
     public async Task<ActionResult<BatchCreateReleasePullRequestsResponse>> BatchCreatePullRequests(
         Guid releaseId,
@@ -230,6 +292,73 @@ public sealed class ReleasesController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<ReleaseSummaryDto>> Update(
+        Guid id,
+        [FromBody] UpdateReleaseRequest request,
+        CancellationToken cancellationToken)
+    {
+        var release = await _db.Releases.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        if (release is null)
+            return NotFound();
+
+        if (request.Title is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Title))
+                return BadRequest(new { message = "Title cannot be empty." });
+            release.Title = request.Title.Trim();
+        }
+
+        if (request.SprintLabel is not null)
+            release.SprintLabel = string.IsNullOrWhiteSpace(request.SprintLabel) ? null : request.SprintLabel.Trim();
+
+        if (request.Status is { } newStatus)
+        {
+            if (!IsAllowedStatusTransition(release.Status, newStatus))
+            {
+                return BadRequest(new
+                {
+                    message = $"Cannot change status from {release.Status} to {newStatus}."
+                });
+            }
+
+            release.Status = newStatus;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok(new ReleaseSummaryDto(release.Id, release.Title, release.SprintLabel, release.Status, release.CreatedAt));
+    }
+
+    [HttpDelete("{releaseId:guid}/pull-requests/{pullRequestId:guid}")]
+    public async Task<IActionResult> RemovePullRequest(
+        Guid releaseId,
+        Guid pullRequestId,
+        CancellationToken cancellationToken)
+    {
+        var row = await _db.ReleasePullRequests
+            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId && pr.ReleaseId == releaseId, cancellationToken);
+
+        if (row is null)
+            return NotFound();
+
+        _db.ReleasePullRequests.Remove(row);
+        await _db.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    private static bool IsAllowedStatusTransition(ReleaseLifecycleStatus from, ReleaseLifecycleStatus to) =>
+        (from, to) switch
+        {
+            (ReleaseLifecycleStatus.Draft, ReleaseLifecycleStatus.Active) => true,
+            (ReleaseLifecycleStatus.Draft, ReleaseLifecycleStatus.Completed) => true,
+            (ReleaseLifecycleStatus.Draft, ReleaseLifecycleStatus.Archived) => true,
+            (ReleaseLifecycleStatus.Active, ReleaseLifecycleStatus.Completed) => true,
+            (ReleaseLifecycleStatus.Active, ReleaseLifecycleStatus.Archived) => true,
+            (ReleaseLifecycleStatus.Completed, ReleaseLifecycleStatus.Archived) => true,
+            _ when from == to => true,
+            _ => false
+        };
 
     [HttpPost("{releaseId:guid}/pull-requests/complete-batch")]
     public async Task<ActionResult<CompletePullRequestsBatchResponse>> CompletePullRequestsBatch(

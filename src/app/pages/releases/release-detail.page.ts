@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -94,7 +95,7 @@ type ReleaseDetail = {
 @Component({
   standalone: true,
   selector: 'app-release-detail-page',
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, FormsModule],
   templateUrl: './release-detail.page.html',
   styles: [`
     :host ::ng-deep .md-preview h1 { font-size: 1.35em; font-weight: 700; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
@@ -124,6 +125,11 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly completingPhase = signal<'dev' | 'prod' | null>(null);
   protected readonly checkingStatusPhase = signal<'dev' | 'prod' | null>(null);
   protected readonly closingRelease = signal(false);
+  protected readonly savingMeta = signal(false);
+  protected readonly removingPrId = signal<string | null>(null);
+  protected readonly editingMeta = signal(false);
+  protected readonly editTitle = signal('');
+  protected readonly editSprint = signal('');
   protected readonly collapsedPhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set());
   protected readonly collapsedNotePhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
@@ -211,6 +217,85 @@ export class ReleaseDetailPage implements OnInit {
   protected isReleaseClosed(status: string): boolean {
     const s = (status || '').toLowerCase();
     return s === 'completed' || s === 'archived';
+  }
+
+  protected startEditMeta(): void {
+    const rel = this.release();
+    if (!rel) return;
+    this.editTitle.set(rel.title);
+    this.editSprint.set(rel.sprintLabel ?? '');
+    this.editingMeta.set(true);
+  }
+
+  protected cancelEditMeta(): void {
+    this.editingMeta.set(false);
+  }
+
+  protected async saveMeta(): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    const title = this.editTitle().trim();
+    if (!title) {
+      this.error.set('Title is required.');
+      return;
+    }
+
+    this.savingMeta.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(
+        this.http.patch(`/api/releases/${rel.id}`, {
+          title,
+          sprintLabel: this.editSprint().trim()
+        })
+      );
+      this.editingMeta.set(false);
+      await this.loadRelease(rel.id);
+      this.copyMessage.set('Release details updated.');
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.savingMeta.set(false);
+    }
+  }
+
+  protected async archiveRelease(): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    if (!confirm(`Archive release "${rel.title}"?`)) return;
+
+    this.closingRelease.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, { status: 'Archived' }));
+      await this.loadRelease(rel.id);
+      this.copyMessage.set('Release archived.');
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.closingRelease.set(false);
+    }
+  }
+
+  protected async removePullRequest(pr: ReleasePullRequest): Promise<void> {
+    const rel = this.release();
+    if (!rel) return;
+    const label = this.repoDisplay(pr);
+    if (!confirm(`Remove PR #${pr.azureDevOpsPullRequestId} (${label}) from this release? The ADO pull request is not deleted.`)) {
+      return;
+    }
+
+    this.removingPrId.set(pr.id);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.http.delete(`/api/releases/${rel.id}/pull-requests/${pr.id}`));
+      await this.loadRelease(rel.id);
+      this.copyMessage.set(`Removed PR #${pr.azureDevOpsPullRequestId} from the release.`);
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.removingPrId.set(null);
+    }
   }
 
   protected async closeRelease(): Promise<void> {

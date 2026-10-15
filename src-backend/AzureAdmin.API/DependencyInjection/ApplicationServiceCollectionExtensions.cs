@@ -26,6 +26,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IAzureDevOpsPatResolver, AzureDevOpsPatResolver>();
         services.AddScoped<AzureDevOpsClient>();
         services.AddScoped<AzureDevOpsCatalogService>();
+        services.AddScoped<OrganizationScopeService>();
         services.AddScoped<StaleBranchService>();
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();

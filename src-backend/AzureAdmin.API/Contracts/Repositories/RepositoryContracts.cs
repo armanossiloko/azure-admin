@@ -16,4 +16,7 @@ public sealed record RegisterRepositoryRequest(
     string? ServiceName,
     Guid TeamId);
 
-public sealed record PatchRegisteredRepositoryRequest(string? ServiceName, bool? IsDecommissioned);
+public sealed record PatchRegisteredRepositoryRequest(
+    string? ServiceName = null,
+    bool? IsDecommissioned = null,
+    Guid? TeamId = null);

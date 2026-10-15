@@ -86,6 +86,11 @@
             <span style="font-size: 13px; font-weight: 500">Master → Prod</span>
           </label>
         </div>
+        @if (phase() === 'MasterToProd') {
+          <div class="muted" style="font-size: 12px; margin-top: var(--s-2)">
+            Requires a completed Dev → Master pull request for each selected repository on this release.
+          </div>
+        }
         <div class="field-hint">{{ phaseHint() }}</div>
       </div>
 
@@ -286,6 +291,13 @@
       <div class="banner-body">
         <strong>Couldn't finish</strong>
         <div style="margin-top: 2px; font-size: 12.5px">{{ error() }}</div>
+        @if (preflightIssues().length) {
+          <ul style="margin: 8px 0 0; padding-left: 18px; font-size: 12.5px">
+            @for (issue of preflightIssues(); track issue) {
+              <li style="margin: 2px 0">{{ issue }}</li>
+            }
+          </ul>
+        }
       </div>
     </div>
   }

@@ -27,6 +27,99 @@ public sealed class ReleasePullRequestBatchService
         _commitNotes = commitNotes;
     }
 
+    public async Task<BatchPreflightResponse> PreflightPullRequestsForReleaseAsync(
+        Guid releaseId,
+        Guid teamId,
+        BatchCreateReleasePullRequestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var releaseExists = await _db.Releases.AnyAsync(r => r.Id == releaseId, cancellationToken);
+        if (!releaseExists)
+            throw new InvalidOperationException("Release was not found.");
+
+        var teamExists = await _db.Teams.AnyAsync(t => t.Id == teamId, cancellationToken);
+        if (!teamExists)
+            throw new InvalidOperationException("Team was not found.");
+
+        request = SanitizeBranchOverrides(request);
+        var (activeRepos, skippedDecommissioned) = await LoadAndValidateReposAsync(teamId, request, cancellationToken);
+        var userId = _currentUser.GetRequiredUserId();
+        var sourceBranch = ResolveSourceBranch(request);
+        var targetBranch = ResolveTargetBranch(request);
+
+        var results = new List<BatchPreflightRepoResult>();
+        foreach (var repo in activeRepos)
+        {
+            var issues = new List<string>();
+
+            try
+            {
+                var refs = await _ado.ListBranchRefsAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    cancellationToken);
+
+                var branchNames = refs
+                    .Select(r => BranchShortName(r.Name) ?? r.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                if (!branchNames.Contains(BranchShortName(sourceBranch) ?? sourceBranch))
+                    issues.Add($"Source branch '{BranchShortName(sourceBranch) ?? sourceBranch}' was not found.");
+                if (!branchNames.Contains(BranchShortName(targetBranch) ?? targetBranch))
+                    issues.Add($"Target branch '{BranchShortName(targetBranch) ?? targetBranch}' was not found.");
+            }
+            catch (HttpRequestException ex)
+            {
+                issues.Add($"Could not list branches (check PAT for '{repo.AzureDevOpsOrganization}'): {ex.Message}");
+            }
+            catch (InvalidOperationException ex)
+            {
+                issues.Add(ex.Message);
+            }
+
+            if (request.Phase == ReleasePrPhase.MasterToProd)
+            {
+                var gateIssue = await GetMasterToProdGateIssueAsync(userId, releaseId, repo, cancellationToken);
+                if (gateIssue is not null)
+                    issues.Add(gateIssue);
+            }
+
+            var existing = await _db.ReleasePullRequests.AsNoTracking()
+                .FirstOrDefaultAsync(
+                    pr => pr.ReleaseId == releaseId
+                          && pr.RegisteredRepositoryId == repo.Id
+                          && pr.Phase == request.Phase,
+                    cancellationToken);
+
+            if (existing is not null
+                && existing.Status is not (ReleasePullRequestStatus.Abandoned or ReleasePullRequestStatus.Unknown))
+            {
+                // Unknown may still be abandoned in ADO; create path cleans that up. Active/Completed block.
+                if (existing.Status is ReleasePullRequestStatus.Active or ReleasePullRequestStatus.Completed)
+                {
+                    issues.Add(
+                        $"A {existing.Status.ToString().ToLowerInvariant()} pull request for this phase already exists " +
+                        $"(#{existing.AzureDevOpsPullRequestId}).");
+                }
+            }
+
+            results.Add(new BatchPreflightRepoResult(
+                repo.Id,
+                repo.RepositoryIdOrName,
+                repo.ServiceName,
+                issues.Count == 0,
+                issues));
+        }
+
+        return new BatchPreflightResponse(
+            results.Count > 0 && results.All(r => r.Ok),
+            results,
+            skippedDecommissioned);
+    }
+
     public async Task<BatchCreateReleasePullRequestsResponse> CreatePullRequestsForReleaseAsync(
         Guid releaseId,
         Guid teamId,
@@ -35,10 +128,13 @@ public sealed class ReleasePullRequestBatchService
     {
         var release = await _db.Releases.AsNoTracking()
             .Where(r => r.Id == releaseId)
-            .Select(r => new { r.SprintLabel })
+            .Select(r => new { r.SprintLabel, r.Status })
             .FirstOrDefaultAsync(cancellationToken);
         if (release is null)
             throw new InvalidOperationException("Release was not found.");
+
+        if (release.Status is ReleaseLifecycleStatus.Completed or ReleaseLifecycleStatus.Archived)
+            throw new InvalidOperationException("This release is closed; no further pull requests can be created.");
 
         var teamExists = await _db.Teams.AnyAsync(t => t.Id == teamId, cancellationToken);
         if (!teamExists)
@@ -47,40 +143,7 @@ public sealed class ReleasePullRequestBatchService
         await EnsureTeamEnrolledAsync(releaseId, teamId, cancellationToken);
 
         request = SanitizeBranchOverrides(request);
-
-        var repoIds = request.RegisteredRepositoryIds.Distinct().ToList();
-        if (repoIds.Count == 0)
-            throw new InvalidOperationException("Select at least one registered repository.");
-
-        var repos = await _db.RegisteredRepositories
-            .Where(r => repoIds.Contains(r.Id))
-            .ToListAsync(cancellationToken);
-
-        if (repos.Count != repoIds.Count)
-        {
-            var missing = repoIds.Except(repos.Select(r => r.Id)).ToList();
-            throw new InvalidOperationException($"Unknown repository id(s): {string.Join(", ", missing)}.");
-        }
-
-        foreach (var repo in repos)
-        {
-            if (repo.TeamId != teamId)
-            {
-                throw new InvalidOperationException(
-                    $"Repository '{repo.RepositoryIdOrName}' is assigned to another team, not the team selected for this action.");
-            }
-        }
-
-        var activeRepos = repos.Where(r => !r.IsDecommissioned).ToList();
-        var skippedDecommissioned = repos
-            .Where(r => r.IsDecommissioned)
-            .Select(r => string.IsNullOrWhiteSpace(r.ServiceName) ? r.RepositoryIdOrName : r.ServiceName)
-            .ToList();
-        if (activeRepos.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "Every selected repository is decommissioned, so no pull requests were created. Restore a repository before including it in a release.");
-        }
+        var (activeRepos, skippedDecommissioned) = await LoadAndValidateReposAsync(teamId, request, cancellationToken);
 
         var userId = _currentUser.GetRequiredUserId();
         var activeRepoIds = activeRepos.Select(r => r.Id).ToList();
@@ -90,6 +153,16 @@ public sealed class ReleasePullRequestBatchService
             request.Phase,
             activeRepoIds,
             cancellationToken);
+
+        if (request.Phase == ReleasePrPhase.MasterToProd)
+        {
+            foreach (var repo in activeRepos)
+            {
+                var gateIssue = await GetMasterToProdGateIssueAsync(userId, releaseId, repo, cancellationToken);
+                if (gateIssue is not null)
+                    throw new InvalidOperationException($"{repo.RepositoryIdOrName}: {gateIssue}");
+            }
+        }
 
         var sourceBranch = ResolveSourceBranch(request);
         var targetBranch = ResolveTargetBranch(request);
@@ -143,6 +216,99 @@ public sealed class ReleasePullRequestBatchService
         }
 
         return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
+    }
+
+    private async Task<(List<RegisteredRepository> Active, List<string> SkippedDecommissioned)> LoadAndValidateReposAsync(
+        Guid teamId,
+        BatchCreateReleasePullRequestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var repoIds = request.RegisteredRepositoryIds.Distinct().ToList();
+        if (repoIds.Count == 0)
+            throw new InvalidOperationException("Select at least one registered repository.");
+
+        var repos = await _db.RegisteredRepositories
+            .Where(r => repoIds.Contains(r.Id))
+            .ToListAsync(cancellationToken);
+
+        if (repos.Count != repoIds.Count)
+        {
+            var missing = repoIds.Except(repos.Select(r => r.Id)).ToList();
+            throw new InvalidOperationException($"Unknown repository id(s): {string.Join(", ", missing)}.");
+        }
+
+        foreach (var repo in repos)
+        {
+            if (repo.TeamId != teamId)
+            {
+                throw new InvalidOperationException(
+                    $"Repository '{repo.RepositoryIdOrName}' is assigned to another team, not the team selected for this action.");
+            }
+        }
+
+        var activeRepos = repos.Where(r => !r.IsDecommissioned).ToList();
+        var skippedDecommissioned = repos
+            .Where(r => r.IsDecommissioned)
+            .Select(r => string.IsNullOrWhiteSpace(r.ServiceName) ? r.RepositoryIdOrName : r.ServiceName!)
+            .ToList();
+
+        if (activeRepos.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Every selected repository is decommissioned, so no pull requests were created. Restore a repository before including it in a release.");
+        }
+
+        return (activeRepos, skippedDecommissioned);
+    }
+
+    /// <summary>
+    /// Master → prod requires a completed Dev → Master PR for the same release and repository.
+    /// Refreshes the local status from Azure DevOps when a Dev→Master row exists but is not yet Completed.
+    /// </summary>
+    private async Task<string?> GetMasterToProdGateIssueAsync(
+        Guid userId,
+        Guid releaseId,
+        RegisteredRepository repo,
+        CancellationToken cancellationToken)
+    {
+        var devPr = await _db.ReleasePullRequests
+            .FirstOrDefaultAsync(
+                pr => pr.ReleaseId == releaseId
+                      && pr.RegisteredRepositoryId == repo.Id
+                      && pr.Phase == ReleasePrPhase.DevToMaster,
+                cancellationToken);
+
+        if (devPr is null)
+        {
+            return "Master → prod requires a completed Dev → Master pull request for this repository on the same release.";
+        }
+
+        if (devPr.Status == ReleasePullRequestStatus.Completed)
+            return null;
+
+        try
+        {
+            var status = await _ado.TryGetGitPullRequestStatusAsync(
+                userId,
+                repo.AzureDevOpsOrganization,
+                repo.AzureDevOpsProject,
+                repo.RepositoryIdOrName,
+                devPr.AzureDevOpsPullRequestId,
+                cancellationToken);
+
+            devPr.Status = MapPullRequestStatus(status);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            // Fall through with last known status.
+        }
+
+        if (devPr.Status == ReleasePullRequestStatus.Completed)
+            return null;
+
+        return
+            $"Dev → Master pull request #{devPr.AzureDevOpsPullRequestId} is '{devPr.Status}' — complete it before opening Master → Prod.";
     }
 
     /// <summary>

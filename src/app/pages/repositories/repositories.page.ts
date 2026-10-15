@@ -347,6 +347,25 @@ export class RepositoriesPage implements OnInit {
     return this.teams().find(t => t.id === id)?.name ?? id;
   }
 
+  protected async onTeamChange(row: RegisteredRepository, teamId: string): Promise<void> {
+    if (!teamId || teamId === row.teamId) return;
+    this.busy.set(true);
+    this.error.set(null);
+    this.info.set(null);
+    try {
+      await firstValueFrom(
+        this.http.patch(`/api/registered-repositories/${row.id}`, { teamId })
+      );
+      this.info.set(`Moved ${row.serviceName?.trim() || row.repositoryIdOrName} to ${this.teamLabel(teamId)}.`);
+      await this.refresh();
+    } catch (e: unknown) {
+      this.error.set(this.fmtErr(e));
+      await this.refresh();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   protected async onAliasBlur(row: RegisteredRepository, ev: Event): Promise<void> {
     const el = ev.target as HTMLInputElement;
     const v = el.value.trim();

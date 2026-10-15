@@ -236,7 +236,17 @@
                 </td>
                 <td class="mono">{{ r.repositoryIdOrName }}</td>
                 <td class="muted" style="font-size: 12px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
-                <td>{{ teamLabel(r.teamId) }}</td>
+                <td>
+                  <select
+                    class="select"
+                    style="height: 28px; font-size: 12px; max-width: 180px"
+                    [ngModel]="r.teamId"
+                    (ngModelChange)="onTeamChange(r, $event)"
+                    [disabled]="busy()"
+                  >
+                    <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
+                  </select>
+                </td>
                 <td>
                   @if (r.isDecommissioned) {
                     <span class="badge warn">Decommissioned</span>

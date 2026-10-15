@@ -128,6 +128,14 @@ public sealed class RegisteredRepositoriesController : ControllerBase
         if (request.IsDecommissioned is { } decommissioned)
             row.IsDecommissioned = decommissioned;
 
+        if (request.TeamId is { } teamId)
+        {
+            var teamExists = await _db.Teams.AnyAsync(t => t.Id == teamId, cancellationToken);
+            if (!teamExists)
+                return BadRequest(new { message = "Team was not found." });
+            row.TeamId = teamId;
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new RegisteredRepositoryDto(

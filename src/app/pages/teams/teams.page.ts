@@ -25,6 +25,10 @@ export class TeamsPage implements OnInit {
   protected readonly newName = signal('');
   protected readonly newParentId = signal<string>('');
 
+  protected readonly editingId = signal<string | null>(null);
+  protected readonly editName = signal('');
+  protected readonly editParentId = signal('');
+
   constructor(private readonly http: HttpClient) {}
 
   async ngOnInit(): Promise<void> {
@@ -45,6 +49,52 @@ export class TeamsPage implements OnInit {
     if (!parentId) return '—';
     const t = this.teams().find(x => x.id === parentId);
     return t?.name ?? parentId;
+  }
+
+  protected parentOptions(excludeId?: string | null): Team[] {
+    return this.teams().filter(t => t.id !== excludeId);
+  }
+
+  protected startEdit(team: Team): void {
+    this.editingId.set(team.id);
+    this.editName.set(team.name);
+    this.editParentId.set(team.parentTeamId ?? '');
+    this.error.set(null);
+    this.info.set(null);
+  }
+
+  protected cancelEdit(): void {
+    this.editingId.set(null);
+  }
+
+  protected async saveEdit(team: Team): Promise<void> {
+    const name = this.editName().trim();
+    if (!name) {
+      this.error.set('Team name is required.');
+      return;
+    }
+
+    const parent = this.editParentId().trim();
+    const clearParent = !parent && !!team.parentTeamId;
+    const parentChanged = parent !== (team.parentTeamId ?? '');
+
+    this.busy.set(true);
+    this.error.set(null);
+    this.info.set(null);
+    try {
+      const body: Record<string, unknown> = { name };
+      if (clearParent) body['clearParent'] = true;
+      else if (parentChanged && parent) body['parentTeamId'] = parent;
+
+      await firstValueFrom(this.http.patch(`/api/teams/${team.id}`, body));
+      this.editingId.set(null);
+      this.info.set('Team updated.');
+      await this.refresh();
+    } catch (e: unknown) {
+      this.error.set(this.fmtErr(e));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async create(): Promise<void> {

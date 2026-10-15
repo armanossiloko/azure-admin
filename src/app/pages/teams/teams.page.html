@@ -92,11 +92,38 @@
             </thead>
             <tbody>
               <tr *ngFor="let t of teams()">
-                <td style="font-weight: 500">{{ t.name }}</td>
-                <td class="muted">{{ parentName(t.parentTeamId) }}</td>
-                <td class="actions">
-                  <button type="button" class="btn btn-sm btn-danger" (click)="remove(t)" [disabled]="busy()">Delete</button>
-                </td>
+                @if (editingId() === t.id) {
+                  <td>
+                    <input
+                      class="input"
+                      style="height: 28px; font-size: 12.5px"
+                      [ngModel]="editName()"
+                      (ngModelChange)="editName.set($event)"
+                    />
+                  </td>
+                  <td>
+                    <select
+                      class="select"
+                      style="height: 28px; font-size: 12px"
+                      [ngModel]="editParentId()"
+                      (ngModelChange)="editParentId.set($event)"
+                    >
+                      <option value="">— None —</option>
+                      <option *ngFor="let p of parentOptions(t.id)" [value]="p.id">{{ p.name }}</option>
+                    </select>
+                  </td>
+                  <td class="actions">
+                    <button type="button" class="btn btn-sm btn-primary" (click)="saveEdit(t)" [disabled]="busy()">Save</button>
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="cancelEdit()" [disabled]="busy()">Cancel</button>
+                  </td>
+                } @else {
+                  <td style="font-weight: 500">{{ t.name }}</td>
+                  <td class="muted">{{ parentName(t.parentTeamId) }}</td>
+                  <td class="actions">
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="startEdit(t)" [disabled]="busy()">Edit</button>
+                    <button type="button" class="btn btn-sm btn-danger" (click)="remove(t)" [disabled]="busy()">Delete</button>
+                  </td>
+                }
               </tr>
             </tbody>
           </table>
