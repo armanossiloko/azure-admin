@@ -1,0 +1,22 @@
+---
+description: Preserve backward compatibility; seamless migrations; additive local stacks only
+alwaysApply: true
+---
+
+# Backward compatibility
+
+Existing deployments and published images must keep working without operator reconfiguration.
+
+## Hard requirements
+
+- Do **not** change published image contracts (`Dockerfile*`, default ports, env var **names**, health endpoints) unless the change is fully additive and old configs still work.
+- Do **not** alter `docker-compose.yml` or `.env.example` defaults in ways that force existing users to reconfigure. New local/test stacks go in separate files (`docker-compose.dev.yml`, `docker/dev/`).
+- API/JSON: prefer additive optional fields. Keep legacy property names during transition when clients may still send or expect them.
+- EF migrations must apply on startup; existing data must work with **zero** user clicks. Dual-read old formats; never require a settings re-save to "upgrade" stored values.
+- Document optional stacks in `docker/dev/README.md` — do not rewrite the existing README Compose section.
+
+## Gate before merging infra changes
+
+Ask: would a user of `ghcr.io/armanossiloko/azure-admin` or plain `docker compose up` need new env vars, port changes, or Keycloak client edits? If yes, make it opt-in or seamlessly default to the old behavior.
+
+Canonical copy for all agents: see root `AGENTS.md`.
