@@ -1,0 +1,100 @@
+# Optional local test stack: Postgres + Keycloak + API + nginx SPA.
+#
+# ADDITIVE ONLY — does not replace or alter docker-compose.yml / .env.example /
+# Dockerfiles / GHCR image build. Existing users keep: docker compose up
+#
+# Docs: docker/dev/README.md
+#
+# Usage:
+#   cp .env.dev.example .env.dev
+#   docker compose -f docker-compose.dev.yml --env-file .env.dev up --build
+#
+# App:       http://localhost:8080
+# Keycloak:  http://localhost:8081  (admin / admin)
+# Login user: admin / admin  (realm azure-admin)
+
+name: azure-admin-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-azureadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-azureadmin}
+      POSTGRES_DB: ${POSTGRES_DB:-azureadmin}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-azureadmin} -d ${POSTGRES_DB:-azureadmin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: 8080
+      # Issuer / browser URL must stay on localhost so cookies + OIDC redirect match.
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8081
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Readiness lives on the management port (not 8080) in Keycloak 25+.
+      KC_HTTP_MANAGEMENT_PORT: 9000
+    volumes:
+      - ./docker/dev/keycloak/azure-admin-realm.json:/opt/keycloak/data/import/azure-admin-realm.json:ro
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Postgres__Host: postgres
+      Postgres__Port: 5432
+      Postgres__Database: ${POSTGRES_DB:-azureadmin}
+      Postgres__Username: ${POSTGRES_USER:-azureadmin}
+      Postgres__Password: ${POSTGRES_PASSWORD:-azureadmin}
+      Postgres__SslMode: Disable
+      AzureDevOps__ApiVersion: ${AZURE_DEVOPS_API_VERSION:-7.1}
+      # Same issuer the browser sees. localhost is remapped to the host gateway below
+      # so the container can reach published Keycloak on :8081.
+      Keycloak__Authority: http://localhost:8081/realms/azure-admin
+      Keycloak__ClientId: ${KEYCLOAK_CLIENT_ID:-azure-admin}
+      Keycloak__ClientSecret: ${KEYCLOAK_CLIENT_SECRET:-local-dev-secret-change-me}
+      Keycloak__RequireHttpsMetadata: "false"
+    expose:
+      - "8080"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_dev_data:
