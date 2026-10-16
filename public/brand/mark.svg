@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Azure Admin">
+  <defs>
+    <linearGradient id="tile" x1="4" y1="0" x2="28" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6AA4FF"/>
+      <stop offset="1" stop-color="#2B63E8"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#tile)"/>
+  <!-- Geometric A, optically centered -->
+  <path fill="#FFFFFF" fill-rule="evenodd" d="
+    M16 6.4 24.85 24.6h-3.55l-1.72-3.7H12.42l-1.72 3.7H7.15L16 6.4Zm0 5.35-2.48 5.35h4.96L16 11.75Z"/>
+</svg>

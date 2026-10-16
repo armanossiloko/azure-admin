@@ -4,10 +4,10 @@
    ============================================================ */
 
 :root {
-  /* Type */
-  --font-sans: "Inter Tight", "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
-  --font-display: "Inter Tight", "Inter", -apple-system, system-ui, sans-serif;
+  /* Type — IBM Plex: enterprise ops, loaded in index.html */
+  --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
+  --font-display: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
 
   /* Spacing scale */
   --s-1: 4px;
@@ -299,21 +299,22 @@ button { cursor: pointer; }
 .brand-mark {
   width: 26px; height: 26px;
   border-radius: 7px;
-  background: linear-gradient(135deg, var(--accent), oklch(from var(--accent) calc(l - 0.18) c h));
-  display: grid; place-items: center;
-  color: var(--on-accent);
-  font-weight: 700;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  letter-spacing: 0;
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgb(255 255 255 / 0.18);
   flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: transparent;
+}
+.brand-mark img,
+.brand-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .brand-name {
   display: flex; flex-direction: column; gap: 0;
   white-space: nowrap; overflow: hidden;
 }
-.brand-name .n { font-size: 13px; font-weight: 600; line-height: 1.15; }
+.brand-name .n { font-size: 13px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; }
 .brand-name .s { font-size: 10.5px; color: var(--text-3); font-family: var(--font-mono); line-height: 1.15; }
 .app[data-sidebar="collapsed"] .brand-name,
 .app[data-sidebar="icon"] .brand-name { display: none; }
