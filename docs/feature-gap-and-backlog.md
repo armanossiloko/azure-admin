@@ -42,14 +42,14 @@ Releases still create as `Draft`. Status moves via PATCH (`Start release` / clos
 
 `ReleasePullRequest.Status` is persisted, shown on the release detail table, refreshed via **Check status** / `status-refresh`, and synced in the background when opening a release. New PR rows are stored as `Active`.
 
-### 3. Editing and reassignment
+### 3. Editing and reassignment — done
 
-| Entity | Missing capability |
-|--------|-------------------|
-| **Releases** | Edit title, sprint, or status after creation |
-| **Teams** | Rename or change parent (create/delete only) |
-| **Registered repos** | Move repo to another team (`Patch` only updates `serviceName`) |
-| **Release PRs** | Manual remove from a release (only implicit cleanup when ADO PR is abandoned) |
+| Entity | Capability |
+|--------|------------|
+| **Releases** | PATCH title, sprint, status (detail edit form + Start/Close/Archive) |
+| **Teams** | PATCH rename / reparent |
+| **Registered repos** | PATCH service name, decommissioned, **team reassignment** |
+| **Release PRs** | DELETE removes the row from the release (ADO PR untouched) |
 
 ### 4. Org switcher — partial scoping
 

@@ -133,6 +133,7 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly editingMeta = signal(false);
   protected readonly editTitle = signal('');
   protected readonly editSprint = signal('');
+  protected readonly editStatus = signal('Draft');
   protected readonly collapsedPhases = signal<ReadonlySet<PhaseBucketKey>>(new Set());
   protected readonly collapsedNotePhases = signal<ReadonlySet<PhaseBucketKey>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
@@ -284,11 +285,21 @@ export class ReleaseDetailPage implements OnInit {
     if (!rel) return;
     this.editTitle.set(rel.title);
     this.editSprint.set(rel.sprintLabel ?? '');
+    this.editStatus.set(rel.status || 'Draft');
     this.editingMeta.set(true);
   }
 
   protected cancelEditMeta(): void {
     this.editingMeta.set(false);
+  }
+
+  /** Status values the current release may transition to (including no-op). */
+  protected editableStatusOptions(current: string): string[] {
+    const c = (current || 'Draft').toLowerCase();
+    if (c === 'draft') return ['Draft', 'Active', 'Completed', 'Archived'];
+    if (c === 'active') return ['Active', 'Completed', 'Archived'];
+    if (c === 'completed') return ['Completed', 'Archived'];
+    return ['Archived'];
   }
 
   protected async saveMeta(): Promise<void> {
@@ -303,14 +314,18 @@ export class ReleaseDetailPage implements OnInit {
     this.savingMeta.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(
-        this.http.patch(`/api/releases/${rel.id}`, {
-          title,
-          sprintLabel: this.editSprint().trim()
-        })
-      );
+      const body: Record<string, string> = {
+        title,
+        sprintLabel: this.editSprint().trim()
+      };
+      const nextStatus = this.editStatus().trim();
+      if (nextStatus && nextStatus.toLowerCase() !== (rel.status || '').toLowerCase()) {
+        body['status'] = nextStatus;
+      }
+
+      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, body));
       this.editingMeta.set(false);
-      await this.loadRelease(rel.id);
+      await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release details updated.');
     } catch (e: unknown) {
       this.error.set(this.prettyError(e));

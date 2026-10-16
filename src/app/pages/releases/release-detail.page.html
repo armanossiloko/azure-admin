@@ -10,6 +10,11 @@
         <div style="display: grid; gap: var(--s-2); max-width: 480px">
           <input class="input" [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" placeholder="Release title" />
           <input class="input mono" [ngModel]="editSprint()" (ngModelChange)="editSprint.set($event)" placeholder="Sprint label" />
+          <select class="select" [ngModel]="editStatus()" (ngModelChange)="editStatus.set($event)">
+            @for (opt of editableStatusOptions(rel.status); track opt) {
+              <option [value]="opt">{{ opt }}</option>
+            }
+          </select>
           <div style="display: flex; gap: var(--s-2)">
             <button type="button" class="btn btn-primary btn-sm" (click)="saveMeta()" [disabled]="savingMeta()">
               {{ savingMeta() ? 'Saving…' : 'Save' }}
