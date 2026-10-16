@@ -123,6 +123,7 @@
         @let otherPrs = pullRequestsInPhase(rel.pullRequests, 'other');
         @for (bucket of prPhaseBuckets; track bucket.key) {
           @let prs = pullRequestsInPhase(rel.pullRequests, bucket.key);
+          @if (bucket.key !== 'backmerge' || prs.length) {
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
               <button
@@ -213,6 +214,7 @@
               }
             }
           </div>
+          }
         }
         @if (otherPrs.length) {
           <div>
@@ -302,6 +304,7 @@
           @let otherNoteBlocks = commitNotesInPhase(rel.repositoryCommitNotes, 'other');
           @for (bucket of prPhaseBuckets; track bucket.key) {
             @let blocks = commitNotesInPhase(rel.repositoryCommitNotes, bucket.key);
+            @if (bucket.key !== 'backmerge' || blocks.length) {
             <div>
               <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
                 <button
@@ -395,6 +398,7 @@
               }
               }
             </div>
+            }
           }
           @if (otherNoteBlocks.length) {
             <div>

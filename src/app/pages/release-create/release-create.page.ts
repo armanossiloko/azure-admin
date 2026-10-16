@@ -32,7 +32,7 @@ type ReleaseSummary = {
 };
 
 type BatchCreateResponse = {
-  results: { repositoryIdOrName: string; pullRequestId: number; url: string }[];
+  results: { repositoryIdOrName: string; pullRequestId: number; url: string; note?: string | null }[];
   skippedDecommissionedRepositories?: string[];
 };
 
@@ -100,11 +100,13 @@ export class ReleaseCreatePage implements OnInit {
       : `Release master into prod - Release ${label}`;
   });
 
-  protected readonly phaseHint = computed(() =>
-    this.phase() === 'DevToMaster'
-      ? 'Default branches: dev → master (override below if needed).'
-      : 'Default branches: master → prod (override below if needed).'
-  );
+  protected readonly phaseHint = computed(() => {
+    const branches =
+      this.phase() === 'DevToMaster'
+        ? 'Default branches: dev → master (override below if needed).'
+        : 'Default branches: master → prod (override below if needed).';
+    return `${branches} If prod is ahead of dev, the only pull request opened is prod → dev. Promotions start only after prod and master are not ahead of dev.`;
+  });
 
   protected setPhase(v: string): void {
     this.phase.set(v === 'MasterToProd' ? 'MasterToProd' : 'DevToMaster');

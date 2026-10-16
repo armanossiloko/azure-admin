@@ -61,7 +61,12 @@ public sealed record BatchCreateReleasePullRequestsResponse(
     IReadOnlyList<CreatedPullRequestResult> Results,
     IReadOnlyList<string> SkippedDecommissionedRepositories);
 
-public sealed record CreatedPullRequestResult(string RepositoryIdOrName, int PullRequestId, string Url);
+public sealed record CreatedPullRequestResult(
+    string RepositoryIdOrName,
+    int PullRequestId,
+    string Url,
+    /// <summary>Set when this pull request is a prod → dev back-merge opened instead of the requested promotion.</summary>
+    string? Note = null);
 
 public sealed record BatchPreflightResponse(
     bool CanProceed,
@@ -73,7 +78,8 @@ public sealed record BatchPreflightRepoResult(
     string RepositoryIdOrName,
     string? ServiceName,
     bool Ok,
-    IReadOnlyList<string> Issues);
+    IReadOnlyList<string> Issues,
+    IReadOnlyList<string>? Notices = null);
 
 public sealed record AddTeamToReleaseRequest(Guid TeamId);
 

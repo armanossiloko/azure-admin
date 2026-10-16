@@ -6,6 +6,8 @@ import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { firstValueFrom } from 'rxjs';
 
+type PhaseBucketKey = 'dev' | 'prod' | 'backmerge';
+
 type ReleaseTeam = { id: string; teamId: string; teamName: string };
 
 type ReleasePullRequest = {
@@ -112,7 +114,8 @@ type ReleaseDetail = {
   `]
 })
 export class ReleaseDetailPage implements OnInit {
-  protected readonly prPhaseBuckets: { key: 'dev' | 'prod'; title: string }[] = [
+  protected readonly prPhaseBuckets: { key: PhaseBucketKey; title: string }[] = [
+    { key: 'backmerge', title: 'Prod → Dev' },
     { key: 'dev', title: 'Dev → Master' },
     { key: 'prod', title: 'Master → Prod' }
   ];
@@ -122,16 +125,16 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly notesBusy = signal(false);
   protected readonly notesMessage = signal<string | null>(null);
   protected readonly copyMessage = signal<string | null>(null);
-  protected readonly completingPhase = signal<'dev' | 'prod' | null>(null);
-  protected readonly checkingStatusPhase = signal<'dev' | 'prod' | null>(null);
+  protected readonly completingPhase = signal<PhaseBucketKey | null>(null);
+  protected readonly checkingStatusPhase = signal<PhaseBucketKey | null>(null);
   protected readonly closingRelease = signal(false);
   protected readonly savingMeta = signal(false);
   protected readonly removingPrId = signal<string | null>(null);
   protected readonly editingMeta = signal(false);
   protected readonly editTitle = signal('');
   protected readonly editSprint = signal('');
-  protected readonly collapsedPhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set());
-  protected readonly collapsedNotePhases = signal<ReadonlySet<'dev' | 'prod'>>(new Set(['dev', 'prod']));
+  protected readonly collapsedPhases = signal<ReadonlySet<PhaseBucketKey>>(new Set());
+  protected readonly collapsedNotePhases = signal<ReadonlySet<PhaseBucketKey>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
   protected readonly previewHtml = signal<SafeHtml>('');
 
@@ -188,11 +191,11 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
-  protected phaseCollapsed(key: 'dev' | 'prod'): boolean {
+  protected phaseCollapsed(key: PhaseBucketKey): boolean {
     return this.collapsedPhases().has(key);
   }
 
-  protected togglePhaseCollapsed(key: 'dev' | 'prod'): void {
+  protected togglePhaseCollapsed(key: PhaseBucketKey): void {
     this.collapsedPhases.update((s) => {
       const next = new Set(s);
       if (next.has(key)) next.delete(key);
@@ -201,11 +204,11 @@ export class ReleaseDetailPage implements OnInit {
     });
   }
 
-  protected noteBucketCollapsed(key: 'dev' | 'prod'): boolean {
+  protected noteBucketCollapsed(key: PhaseBucketKey): boolean {
     return this.collapsedNotePhases().has(key);
   }
 
-  protected toggleNoteBucketCollapsed(key: 'dev' | 'prod'): void {
+  protected toggleNoteBucketCollapsed(key: PhaseBucketKey): void {
     this.collapsedNotePhases.update((s) => {
       const next = new Set(s);
       if (next.has(key)) next.delete(key);
@@ -329,7 +332,7 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
-  protected async checkPrStatuses(phaseKey: 'dev' | 'prod'): Promise<void> {
+  protected async checkPrStatuses(phaseKey: PhaseBucketKey): Promise<void> {
     const rel = this.release();
     if (!rel) return;
 
@@ -337,7 +340,7 @@ export class ReleaseDetailPage implements OnInit {
     this.error.set(null);
     this.copyMessage.set(null);
     try {
-      const phase = phaseKey === 'prod' ? 'MasterToProd' : 'DevToMaster';
+      const phase = this.phaseApiName(phaseKey);
       await firstValueFrom(
         this.http.post<StatusRefreshResponse>(`/api/releases/${rel.id}/pull-requests/status-refresh`, { phase })
       );
@@ -361,19 +364,27 @@ export class ReleaseDetailPage implements OnInit {
   protected phaseLabel(phase: string | number): string {
     if (phase === 'DevToMaster' || phase === 0 || phase === '0') return 'Dev → Master';
     if (phase === 'MasterToProd' || phase === 1 || phase === '1') return 'Master → Prod';
+    if (phase === 'ProdToDev' || phase === 2 || phase === '2') return 'Prod → Dev';
     return String(phase);
   }
 
   /** Buckets API enum / JSON numeric phase for grouping in the UI. */
-  protected phaseBucket(phase: string | number): 'dev' | 'prod' | 'other' {
+  protected phaseBucket(phase: string | number): PhaseBucketKey | 'other' {
     if (phase === 'DevToMaster' || phase === 0 || phase === '0') return 'dev';
     if (phase === 'MasterToProd' || phase === 1 || phase === '1') return 'prod';
+    if (phase === 'ProdToDev' || phase === 2 || phase === '2') return 'backmerge';
     return 'other';
+  }
+
+  private phaseApiName(phaseKey: PhaseBucketKey): 'DevToMaster' | 'MasterToProd' | 'ProdToDev' {
+    if (phaseKey === 'prod') return 'MasterToProd';
+    if (phaseKey === 'backmerge') return 'ProdToDev';
+    return 'DevToMaster';
   }
 
   protected pullRequestsInPhase(
     prs: ReleasePullRequest[],
-    bucket: 'dev' | 'prod' | 'other'
+    bucket: PhaseBucketKey | 'other'
   ): ReleasePullRequest[] {
     return prs
       .filter((p) => this.phaseBucket(p.phase) === bucket)
@@ -386,7 +397,7 @@ export class ReleaseDetailPage implements OnInit {
 
   protected commitNotesInPhase(
     notes: ReleaseRepositoryCommitNotes[] | undefined,
-    bucket: 'dev' | 'prod' | 'other'
+    bucket: PhaseBucketKey | 'other'
   ): ReleaseRepositoryCommitNotes[] {
     if (!notes?.length) return [];
     return notes
@@ -406,7 +417,7 @@ export class ReleaseDetailPage implements OnInit {
     return this.commitsForBlock(block).length > 0;
   }
 
-  protected async copyPrLinks(phaseKey: 'dev' | 'prod'): Promise<void> {
+  protected async copyPrLinks(phaseKey: PhaseBucketKey): Promise<void> {
     const rel = this.release();
     if (!rel) return;
     const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey);
@@ -431,7 +442,7 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
-  protected openAllPrs(phaseKey: 'dev' | 'prod'): void {
+  protected openAllPrs(phaseKey: PhaseBucketKey): void {
     const rel = this.release();
     if (!rel) return;
     for (const pr of this.pullRequestsInPhase(rel.pullRequests, phaseKey)) {
@@ -439,7 +450,7 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
-  protected async completeAllPrs(phaseKey: 'dev' | 'prod'): Promise<void> {
+  protected async completeAllPrs(phaseKey: PhaseBucketKey): Promise<void> {
     const rel = this.release();
     if (!rel) return;
     const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey);
@@ -456,7 +467,7 @@ export class ReleaseDetailPage implements OnInit {
     this.error.set(null);
     this.copyMessage.set(null);
     try {
-      const phase = phaseKey === 'prod' ? 'MasterToProd' : 'DevToMaster';
+      const phase = this.phaseApiName(phaseKey);
       const resp = await firstValueFrom(
         this.http.post<CompleteBatchResponse>(`/api/releases/${rel.id}/pull-requests/complete-batch`, { phase })
       );
@@ -494,7 +505,7 @@ export class ReleaseDetailPage implements OnInit {
     );
   }
 
-  protected async copyMarkdown(scope: 'all' | 'phase' | 'repo', phaseKey?: 'dev' | 'prod', block?: ReleaseRepositoryCommitNotes): Promise<void> {
+  protected async copyMarkdown(scope: 'all' | 'phase' | 'repo', phaseKey?: PhaseBucketKey, block?: ReleaseRepositoryCommitNotes): Promise<void> {
     const rel = this.release();
     if (!rel) return;
 
