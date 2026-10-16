@@ -80,3 +80,8 @@ docker build -f Dockerfile.frontend .
 ## Database
 
 EF Core migrations are under `src-backend/AzureAdmin.API/Migrations/`. The API applies migrations on startup.
+
+## Docs
+
+- [Setup guide](docs/setup.md) — Keycloak, ADO PAT scopes, release workflow, org switcher
+- [Feature gaps & backlog](docs/feature-gap-and-backlog.md)

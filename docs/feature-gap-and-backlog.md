@@ -1,6 +1,6 @@
 # Azure Admin — Feature gaps & implementation backlog
 
-This document summarizes what is **not implemented yet** in the workspace and a broader list of **features that could be added**. It reflects the codebase after the stubbed-shell work (June 2026): Keycloak auth, release PR batching, per-user ADO PATs, global teams/releases/settings, plus in-app notifications, account settings, global search, and org-scoped repository views.
+This document summarizes remaining gaps and a broader list of **features that could be added**. Setup, Keycloak, ADO PAT scopes, and the release workflow are documented in [setup.md](setup.md).
 
 ---
 
@@ -11,49 +11,29 @@ The core product described in the [README](../README.md) is largely in place:
 | Area | Status |
 |------|--------|
 | **Keycloak OIDC** | Login, logout, `/api/auth/me`, cookie session |
-| **Teams** | Create, list, delete, optional parent team (API + UI) |
-| **Registered repositories** | Manual register, ADO catalog import, filter by team and **selected organization**, edit display alias, delete |
-| **Releases** | Draft releases, attach teams via PR batches, batch-create dev→master / master→prod PRs, commit notes refresh, markdown export |
+| **Teams** | Create, list, rename/reparent, delete; optional parent; filter by selected org |
+| **Registered repositories** | Manual register, ADO catalog import, filter by team and **selected organization**, edit alias / team / decommissioned, delete |
+| **Releases** | Draft→Active→Completed/Archived lifecycle; PR batches; commit notes; markdown export; edit meta; remove PRs from release |
+| **PR status** | Persisted on `ReleasePullRequest`, shown on detail, sync on open / Check status |
 | **Azure DevOps** | Per-user organizations, encrypted PATs, catalog (projects/repos) |
 | **Settings** | Global conventional-commit grouping + Jira link extraction (when enabled) |
-| **Dashboard** | Stats, onboarding checklist, recent activity |
-| **In-app notifications** | `UserNotification` store, `/api/notifications`, bell panel with unread badge; navigation returns live `unreadNotificationsCount` |
-| **PAT expiry reminders** | In-app notifications when PAT is expired or within 14 days (`NotificationService` sync on navigation/notifications load); toggle via account settings (`NotifyPatExpiry`) |
-| **Account settings** | `/settings/account` — profile (Keycloak), default org, theme, PAT notification preference; shell menu wired |
-| **Global search** | Topbar search (`/api/search`), releases / teams / repos / orgs; `/` and `Ctrl+K` shortcuts |
-| **Organization switcher** | Sidebar selection persisted in `sessionStorage`; **scopes** registered-repository list, catalog import default, and release-create repo loading via `organizationId` query param |
-| **Auth cleanup** | Dead `RegisterPage` and `/api/auth/register` removed (Keycloak-only sign-in) |
+| **Dashboard** | Stats, onboarding checklist, recent activity (org-scoped when selected) |
+| **In-app notifications** | `UserNotification` store, `/api/notifications`, bell panel with unread badge |
+| **PAT expiry reminders** | In-app when PAT is expired or within 14 days; toggle via account settings |
+| **Account settings** | `/settings/account` — profile, default org, theme, PAT notification preference |
+| **Global search** | Topbar search (`/api/search`), org-scoped when an org is selected |
+| **Organization switcher** | Scopes repos, teams, releases, dashboard, search, catalog/import |
+| **Auth cleanup** | Keycloak-only sign-in |
+| **Tests** | Backend xUnit starter + fixed `app.spec.ts` |
+| **Docs** | README + [setup.md](setup.md) (Keycloak, PAT scopes, release workflow) |
 
-**Note:** Jira is implemented when enabled in settings—the backend extracts ticket keys and builds browse URLs in release notes. It is not a missing integration.
+**Note:** Jira is implemented when enabled in settings—the backend extracts ticket keys and builds browse URLs in release notes.
 
-**Note:** PAT reminders are **in-app only** (no email or background job). Email digests remain a future item in the backlog below.
+**Note:** Notifications are **in-app only** (no email channel). Email digests / PAT email are out of scope for this product.
 
 ---
 
 ## Features not implemented (remaining gaps)
-
-These are **real missing product features**, not UI stubs. Former shell mocks (notifications, search, account settings, org switcher, registration) are implemented—see table above.
-
-### 1. Release lifecycle (Active / Completed / Archived) — done
-
-Releases still create as `Draft`. Status moves via PATCH (`Start release` / close / archive), auto-promote to `Active` on first PR batch or completed PR, and `POST .../close` → `Completed`. Detail and list show lifecycle badges.
-
-### 2. Pull request status in the UI — done
-
-`ReleasePullRequest.Status` is persisted, shown on the release detail table, refreshed via **Check status** / `status-refresh`, and synced in the background when opening a release. New PR rows are stored as `Active`.
-
-### 3. Editing and reassignment — done
-
-| Entity | Capability |
-|--------|------------|
-| **Releases** | PATCH title, sprint, status (detail edit form + Start/Close/Archive) |
-| **Teams** | PATCH rename / reparent |
-| **Registered repos** | PATCH service name, decommissioned, **team reassignment** |
-| **Release PRs** | DELETE removes the row from the release (ADO PR untouched) |
-
-### 4. Org switcher — scoping — done
-
-The switcher filters registered repositories, catalog/import, release list, dashboard stats, **teams** (teams with repos in the org, plus teams with no repos), and **global search**. Releases stay org-agnostic in the model; membership is derived from repos/teams/PRs (empty drafts still appear under any org).
 
 ### 5. Shared (non–per-user) application data
 
@@ -61,36 +41,34 @@ Only Azure organizations and PATs are tied to `UserId`. **Teams, releases, regis
 
 `AppSettings` is a **single global row** (`SingletonId = 1`), not per user or per org.
 
-### 6. Automated tests — done (starter)
-
-- **Backend:** `AzureAdmin.API.Tests` (xUnit) covers lifecycle transitions and ADO PR status mapping.
-- **Frontend:** `app.spec.ts` asserts the root component and `<router-outlet />`.
-
-### 7. Documentation
-
-This file and the README exist; there is still no dedicated setup guide (ADO PAT scopes, release workflow, Keycloak config) beyond README/env examples.
-
 ### 8. Notification types beyond PAT
 
 The notification store supports arbitrary kinds, but only **PAT expired** and **PAT expiring soon** are generated today. PR merged, batch failures, and similar events are not wired yet.
+
+### Recently closed gaps
+
+| Item | Notes |
+|------|--------|
+| **1. Release lifecycle** | Start / close / archive; auto-Active on first PR batch |
+| **2. PR status in UI** | Persist + show + sync |
+| **3. Editing / reassignment** | Releases, teams, repos, remove PR from release |
+| **4. Org switcher scoping** | Releases, dashboard, teams, search |
+| **6. Automated tests** | Backend unit tests + fixed frontend spec |
+| **7. Documentation** | [setup.md](setup.md) |
 
 ---
 
 ## Minor / infrastructure notes
 
-- **PWA:** Service worker and `manifest.webmanifest` are wired in `angular.json` (build config; not a separate user-facing feature unless offline/install is a product goal).
+- **PWA:** Service worker and `manifest.webmanifest` are wired in `angular.json`.
 - **CI:** Pipelines exist for frontend/backend; they do not imply missing app features.
 
 ### Summary of gaps
 
-The **release PR batching + commit notes + ADO PAT/catalog** path is the mature part of the app. The largest **remaining product** gaps are:
+Largest **remaining** product gaps:
 
-- Release lifecycle beyond Draft
-- PR status visibility
-- Richer CRUD (teams / releases / repos)
-- Multi-user data isolation (if each Keycloak user should own their own teams/releases)
-- Tests and expanded product docs
-- Broader notification sources (PR/batch events), optional email for PAT expiry
+- Multi-user / multi-tenant data isolation (if needed)
+- Broader in-app notification sources (PR/batch events)
 
 ---
 
@@ -100,41 +78,34 @@ The **release PR batching + commit notes + ADO PAT/catalog** path is the mature 
 
 | Item | Why it matters |
 |------|----------------|
-| **Release lifecycle** | `Active` / `Completed` / `Archived` exist in the model but releases never leave `Draft`. Add status transitions + UI (start release, complete, archive). |
-| **PR status in UI** | ADO status is read only when replacing stale PRs. Persist `status` / `mergeStatus` and show it on release detail; optional background sync. |
-| **Edit releases** | PATCH title, sprint, status, description after creation. |
-| **Edit teams** | Rename team, change parent without delete/recreate. |
-| **Reassign repositories** | Move a registered repo to another team. |
-| **Remove PR from release** | DELETE endpoint + UI when ADO PR is abandoned or created by mistake. |
-| **Org switcher — full scoping** | Extend org filter to releases list/dashboard, or document global release model. |
 | **Per-user or per-org tenancy** | Today teams/releases/settings are shared by all users; scope data if multiple squads use one instance. |
 | **Per-user / per-org app settings** | Replace global `AppSettings` singleton if different squads need different Jira/commit rules. |
-| **More notification kinds** | PR merged, batch failures, etc., in existing `UserNotification` store. |
-| **PAT expiry email** | Optional email in addition to in-app PAT reminders. |
-| **Tests** | API integration tests (releases, PAT, batch PR), frontend tests for critical flows; fix stale `app.spec.ts`. |
-| **Product docs** | Expand `docs/` with setup, ADO PAT scopes, release workflow, Keycloak config. |
+| **More notification kinds** | PR merged, batch failures, etc., in existing `UserNotification` store (in-app only). |
+| **Deeper tests** | API integration tests (releases, PAT, batch PR), frontend tests for critical flows. |
 
-### Recently closed (formerly stubbed)
+### Recently closed (formerly stubbed or gap items)
 
 | Item | Status |
 |------|--------|
 | **In-app notifications** | Done — store, API, shell panel, unread count on navigation. |
 | **PAT expiry reminders** | Done — in-app via `NotificationService`; user can disable in account settings. |
 | **Account settings page** | Done — `/settings/account`. |
-| **Global search** | Done — `/api/search`, topbar UI. |
-| **Org switcher that scopes data** | Done for repositories / import / release-create repos; releases still global. |
-| **Remove registration dead code** | Done — `RegisterPage` removed; Keycloak-only. |
+| **Global search** | Done — `/api/search`, topbar UI; org-scoped. |
+| **Org switcher that scopes data** | Done for repos, teams, releases, dashboard, search. |
+| **Release lifecycle / PR status / editing** | Done — see closed gaps above. |
+| **Setup docs** | Done — [setup.md](setup.md). |
+| **Remove registration dead code** | Done — Keycloak-only. |
 
 ### Release & PR workflow
 
 | Item | Description |
 |------|-------------|
-| **“All PRs ready” gate** | Block master→prod batch until dev→master PRs are completed/merged (configurable per release). |
+| **“All PRs ready” gate** | Block master→prod batch until dev→master PRs are completed/merged (configurable per release). *(Basic gate already exists; make configurable.)* |
 | **Release checklist** | Custom steps per phase (e.g. QA sign-off, change ticket) with checkboxes on release detail. |
 | **Release templates** | Preset title/sprint pattern, default teams, default branch names, included repo sets. |
 | **Scheduled / recurring releases** | Sprint-based auto-create draft releases. |
 | **Auto-advance status** | When all PRs in a phase are completed, move release to `Active` or unlock next phase. |
-| **PR refresh from ADO** | One-click sync titles, status, reviewers without re-creating PRs. |
+| **PR refresh from ADO** | One-click sync titles, reviewers (status sync already exists). |
 | **Bulk abandon / recreate** | Select multiple repos in a phase and re-run batch after abandon. |
 | **Custom phases** | Beyond Dev→Master and Master→Prod (e.g. hotfix branch). |
 | **PR description from release notes** | Push generated markdown into ADO PR description on create or update. |
@@ -150,7 +121,6 @@ The **release PR batching + commit notes + ADO PAT/catalog** path is the mature 
 | **Azure Boards / work items** | Link `AB#123` style references like Jira. |
 | **Confluence / wiki export** | One-click publish release notes to a page template. |
 | **Slack / Teams notifications** | Post when batch creates PRs or when a phase completes. |
-| **Email digest** | Weekly active releases + open PRs summary. |
 | **Changelog formats** | JSON, HTML, PDF, or Keep a Changelog besides markdown. |
 | **Commit filters** | Exclude bots, merge commits, or paths; include only `feat`/`fix`. |
 | **Semantic version suggestion** | Infer next version from conventional commits (major/minor/patch). |
@@ -233,22 +203,20 @@ The **release PR batching + commit notes + ADO PAT/catalog** path is the mature 
 
 ### High impact, fits current app
 
-1. Release lifecycle + PR status on detail  
-2. Edit release / reassign repo / remove PR from release  
-3. Org-scoped or per-user data (if multiple squads share one deploy)
+1. More in-app notification kinds (PR/batch events)  
+2. Org-scoped or per-user data (if multiple squads share one deploy)
 
 ### Medium effort, strong workflow value
 
-4. “All dev PRs merged” gate before prod batch  
-5. PR sync from ADO + webhooks  
-6. More notification kinds (PR/batch) + optional PAT email  
-7. Slack/Teams on batch complete  
+3. “All dev PRs merged” gate configurability  
+4. PR webhooks from ADO  
+5. Slack/Teams on batch complete  
 
 ### Polish & scale
 
-8. RBAC + audit log  
-9. API for CI  
-10. Tests + expanded product docs  
+6. RBAC + audit log  
+7. API for CI  
+8. Deeper integration / E2E tests  
 
 ---
 
@@ -256,7 +224,7 @@ The **release PR batching + commit notes + ADO PAT/catalog** path is the mature 
 
 Narrow this backlog by audience:
 
-- **Single team, one ADO org** — prioritize lifecycle, PR status, and editing.  
+- **Single team, one ADO org** — workflow polish and notifications.  
 - **Many teams, one instance** — prioritize tenancy, RBAC, and per-org settings.  
 - **CI-driven releases** — prioritize API tokens and webhooks early.
 
