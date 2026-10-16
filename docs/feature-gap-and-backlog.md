@@ -34,11 +34,9 @@ The core product described in the [README](../README.md) is largely in place:
 
 These are **real missing product features**, not UI stubs. Former shell mocks (notifications, search, account settings, org switcher, registration) are implemented—see table above.
 
-### 1. Release lifecycle (Active / Completed / Archived)
+### 1. Release lifecycle (Active / Completed / Archived) — done
 
-The enum and dashboard logic reference `Active`, `Completed`, and `Archived`, but **nothing ever sets status beyond `Draft`**. Every create path uses `ReleaseLifecycleStatus.Draft` only; there is no PATCH/status API or UI to promote or complete a release.
-
-The release list copy mentions “in-progress,” but that state cannot be reached in code.
+Releases still create as `Draft`. Status moves via PATCH (`Start release` / close / archive), auto-promote to `Active` on first PR batch or completed PR, and `POST .../close` → `Completed`. Detail and list show lifecycle badges.
 
 ### 2. Pull request status in the UI
 

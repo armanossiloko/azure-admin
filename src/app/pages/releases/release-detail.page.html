@@ -20,7 +20,7 @@
       } @else {
         <h1 class="page-title">{{ rel.title }}</h1>
         <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
-          <span class="badge draft">{{ rel.status }}</span>
+          <span [class]="statusBadgeClass(rel.status)">{{ rel.status }}</span>
           <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
           <span>· Created {{ rel.createdAt | date: 'medium' }}</span>
           @if (!isReleaseClosed(rel.status) || (rel.status || '').toLowerCase() === 'completed') {
@@ -30,6 +30,11 @@
       }
     </div>
     <div class="actions" style="display: flex; gap: var(--s-2); align-items: flex-start">
+      @if (isDraft(rel.status)) {
+        <button type="button" class="btn btn-primary" (click)="startRelease()" [disabled]="closingRelease()">
+          {{ closingRelease() ? 'Starting…' : 'Start release' }}
+        </button>
+      }
       @if (!isReleaseClosed(rel.status)) {
         <button type="button" class="btn btn-ghost" (click)="closeRelease()" [disabled]="closingRelease()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">

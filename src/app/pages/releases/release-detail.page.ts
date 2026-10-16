@@ -222,6 +222,40 @@ export class ReleaseDetailPage implements OnInit {
     return s === 'completed' || s === 'archived';
   }
 
+  protected isDraft(status: string): boolean {
+    return (status || '').toLowerCase() === 'draft';
+  }
+
+  protected statusBadgeClass(status: string): string {
+    switch ((status || '').toLowerCase()) {
+      case 'active':
+        return 'badge active';
+      case 'completed':
+        return 'badge ok';
+      case 'archived':
+        return 'badge';
+      default:
+        return 'badge draft';
+    }
+  }
+
+  protected async startRelease(): Promise<void> {
+    const rel = this.release();
+    if (!rel || !this.isDraft(rel.status)) return;
+
+    this.closingRelease.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, { status: 'Active' }));
+      await this.loadRelease(rel.id);
+      this.copyMessage.set('Release marked Active.');
+    } catch (e: unknown) {
+      this.error.set(this.prettyError(e));
+    } finally {
+      this.closingRelease.set(false);
+    }
+  }
+
   protected startEditMeta(): void {
     const rel = this.release();
     if (!rel) return;

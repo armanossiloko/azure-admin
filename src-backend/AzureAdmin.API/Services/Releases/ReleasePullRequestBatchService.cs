@@ -241,6 +241,7 @@ public sealed class ReleasePullRequestBatchService
                     cancellationToken));
             }
 
+            await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
             return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
         }
 
@@ -331,6 +332,7 @@ public sealed class ReleasePullRequestBatchService
             }
         }
 
+        await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
         return new BatchCreateReleasePullRequestsResponse(created, skippedDecommissioned);
     }
 
@@ -735,16 +737,21 @@ public sealed class ReleasePullRequestBatchService
     }
 
     /// <summary>
-    /// A release starts life as <see cref="ReleaseLifecycleStatus.Draft"/>. As soon as one of its PRs is
-    /// confirmed completed (via our own "Complete all" action, or discovered through a status check),
-    /// the release is no longer just a draft — bump it to <see cref="ReleaseLifecycleStatus.Active"/>.
+    /// A release starts life as <see cref="ReleaseLifecycleStatus.Draft"/>. Opening the first PR batch
+    /// (or confirming a completed PR) moves it to <see cref="ReleaseLifecycleStatus.Active"/>.
     /// </summary>
-    private async Task PromoteReleaseIfHasCompletedPullRequestAsync(Guid releaseId, CancellationToken cancellationToken)
+    private async Task PromoteReleaseToActiveIfDraftAsync(Guid releaseId, CancellationToken cancellationToken)
     {
         var release = await _db.Releases.FirstOrDefaultAsync(r => r.Id == releaseId, cancellationToken);
         if (release is null || release.Status != ReleaseLifecycleStatus.Draft)
             return;
 
+        release.Status = ReleaseLifecycleStatus.Active;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task PromoteReleaseIfHasCompletedPullRequestAsync(Guid releaseId, CancellationToken cancellationToken)
+    {
         var hasCompletedPullRequest = await _db.ReleasePullRequests.AnyAsync(
             pr => pr.ReleaseId == releaseId && pr.Status == ReleasePullRequestStatus.Completed,
             cancellationToken);
@@ -752,8 +759,7 @@ public sealed class ReleasePullRequestBatchService
         if (!hasCompletedPullRequest)
             return;
 
-        release.Status = ReleaseLifecycleStatus.Active;
-        await _db.SaveChangesAsync(cancellationToken);
+        await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
     }
 
     /// <summary>ADO returns PR status as a string (e.g. <c>active</c>) or sometimes a numeric enum value.</summary>
