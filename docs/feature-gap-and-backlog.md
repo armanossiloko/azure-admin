@@ -61,10 +61,10 @@ Only Azure organizations and PATs are tied to `UserId`. **Teams, releases, regis
 
 `AppSettings` is a **single global row** (`SingletonId = 1`), not per user or per org.
 
-### 6. Automated tests
+### 6. Automated tests — done (starter)
 
-- **Backend:** no test project in the solution.
-- **Frontend:** only `src/app/app.spec.ts`, which still expects `Hello, azure-admin` in an `h1` while `app.html` is just `<router-outlet />`—likely broken/stale.
+- **Backend:** `AzureAdmin.API.Tests` (xUnit) covers lifecycle transitions and ADO PR status mapping.
+- **Frontend:** `app.spec.ts` asserts the root component and `<router-outlet />`.
 
 ### 7. Documentation
 

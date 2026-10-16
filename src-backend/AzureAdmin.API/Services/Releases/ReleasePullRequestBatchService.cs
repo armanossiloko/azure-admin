@@ -582,7 +582,7 @@ public sealed class ReleasePullRequestBatchService
                 devPr.AzureDevOpsPullRequestId,
                 cancellationToken);
 
-            devPr.Status = MapPullRequestStatus(status);
+            devPr.Status = ReleasePullRequestStatusMapper.Map(status);
             await _db.SaveChangesAsync(cancellationToken);
         }
         catch (HttpRequestException)
@@ -637,7 +637,7 @@ public sealed class ReleasePullRequestBatchService
                 }
 
                 // Keep the locally stored status in sync with Azure DevOps regardless of outcome below.
-                pr.Status = MapPullRequestStatus(snapshot.Status);
+                pr.Status = ReleasePullRequestStatusMapper.Map(snapshot.Status);
 
                 if (pr.Status == ReleasePullRequestStatus.Completed)
                 {
@@ -722,7 +722,7 @@ public sealed class ReleasePullRequestBatchService
                     pr.AzureDevOpsPullRequestId,
                     cancellationToken);
 
-                pr.Status = MapPullRequestStatus(status);
+                pr.Status = ReleasePullRequestStatusMapper.Map(status);
                 await _db.SaveChangesAsync(cancellationToken);
             }
             catch (HttpRequestException)
@@ -761,34 +761,6 @@ public sealed class ReleasePullRequestBatchService
             return;
 
         await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
-    }
-
-    /// <summary>ADO returns PR status as a string (e.g. <c>active</c>) or sometimes a numeric enum value.</summary>
-    private static ReleasePullRequestStatus MapPullRequestStatus(string? adoStatus)
-    {
-        if (string.IsNullOrWhiteSpace(adoStatus))
-            return ReleasePullRequestStatus.Unknown;
-
-        var s = adoStatus.Trim();
-        if (int.TryParse(s, out var n))
-        {
-            // PullRequestStatus (Azure DevOps Git REST): notSet=0, active=1, abandoned=2, completed=3.
-            return n switch
-            {
-                1 => ReleasePullRequestStatus.Active,
-                2 => ReleasePullRequestStatus.Abandoned,
-                3 => ReleasePullRequestStatus.Completed,
-                _ => ReleasePullRequestStatus.Unknown
-            };
-        }
-
-        return s.ToLowerInvariant() switch
-        {
-            "active" => ReleasePullRequestStatus.Active,
-            "completed" => ReleasePullRequestStatus.Completed,
-            "abandoned" => ReleasePullRequestStatus.Abandoned,
-            _ => ReleasePullRequestStatus.Unknown
-        };
     }
 
     /// <summary>
