@@ -45,10 +45,10 @@
       @if (o.hasPatCredential) {
         <div style="margin-bottom: var(--s-4)">
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2)">
-            <span class="badge ok dot">PAT stored</span>
+            <span class="badge ok pip">PAT stored</span>
             @if (o.patExpiresAt) {
               @if (patExpired(o)) {
-                <span class="badge danger dot">Expired {{ o.patExpiresAt | date: 'shortDate' }}</span>
+                <span class="badge danger pip">Expired {{ o.patExpiresAt | date: 'shortDate' }}</span>
               } @else {
                 <span class="muted" style="font-size: 12px">Expires {{ o.patExpiresAt | date: 'shortDate' }}</span>
               }

@@ -627,7 +627,9 @@ button { cursor: pointer; }
   border-color: var(--border);
 }
 .badge.solid { padding: 3px 9px; }
-.badge.dot::before {
+/* Status pip on badges. Named `.pip` (not `.dot`) so it never shares a class with
+   the standalone 7×7 `.dot` indicator — that collision collapsed "PAT stored" badges. */
+.badge.pip::before {
   content: "";
   width: 6px; height: 6px;
   border-radius: 50%;
@@ -944,21 +946,18 @@ button { cursor: pointer; }
   color: var(--text-2);
 }
 
-/* Status dot — standalone indicator only.
-   Must not match `.badge.dot` (that modifier adds a ::before pip on badges).
-   Without :not(.badge), `.dot { width/height: 7px }` collapses "PAT stored" badges
-   and their overflowing text stacks on top of "Expires …". */
-.dot:not(.badge) {
+/* Standalone status pip (not a badge). Keep the class name free of `.badge`. */
+.dot {
   display: inline-block;
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--text-4);
   flex-shrink: 0;
 }
-.dot.ok:not(.badge) { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
-.dot.warn:not(.badge) { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
-.dot.danger:not(.badge) { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: pulse 2s ease-in-out infinite; }
-.dot.info:not(.badge) { background: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.dot.danger { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); animation: pulse 2s ease-in-out infinite; }
+.dot.info { background: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
 
 /* Progress */
 .progress {
