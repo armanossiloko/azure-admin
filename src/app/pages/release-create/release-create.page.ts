@@ -50,7 +50,7 @@ type BatchPreflightResponse = {
   skippedDecommissionedRepositories: string[];
 };
 
-type ReleasePrPhase = 'DevToMaster' | 'MasterToProd';
+type ReleasePrPhase = 'ProdToDev' | 'DevToMaster' | 'MasterToProd';
 
 type ReleaseForBatchContext = {
   id: string;
@@ -95,23 +95,61 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly prTitle = computed(() => {
     const s = this.sprintLabel().trim();
     const label = s || 'sprint ????/??';
-    return this.phase() === 'DevToMaster'
-      ? `Release dev into master - Release ${label}`
-      : `Release master into prod - Release ${label}`;
+    switch (this.phase()) {
+      case 'ProdToDev':
+        return `Release prod into dev - Release ${label}`;
+      case 'MasterToProd':
+        return `Release master into prod - Release ${label}`;
+      default:
+        return `Release dev into master - Release ${label}`;
+    }
   });
 
   protected readonly phaseHint = computed(() => {
-    const branches =
-      this.phase() === 'DevToMaster'
-        ? 'Default branches: dev → master (override below if needed).'
-        : 'Default branches: master → prod (override below if needed).';
-    return `${branches} If prod is ahead of dev, the only pull request opened is prod → dev. Promotions start only after prod and master are not ahead of dev.`;
+    switch (this.phase()) {
+      case 'ProdToDev':
+        return 'Default branches: prod → dev. Only available when prod is ahead of dev — this must finish before Dev → Master or Master → Prod.';
+      case 'MasterToProd':
+        return 'Default branches: master → prod (override below if needed). Requires a completed Dev → Master PR. Blocked while prod or master is ahead of dev.';
+      default:
+        return 'Default branches: dev → master (override below if needed). Blocked while prod or master is ahead of dev — use Prod → Dev first when prod has drifted.';
+    }
+  });
+
+  protected readonly fromBranchPlaceholder = computed(() => {
+    switch (this.phase()) {
+      case 'ProdToDev':
+        return 'default: prod';
+      case 'MasterToProd':
+        return 'default: master';
+      default:
+        return 'default: dev';
+    }
+  });
+
+  protected readonly toBranchPlaceholder = computed(() => {
+    switch (this.phase()) {
+      case 'ProdToDev':
+        return 'default: dev';
+      case 'MasterToProd':
+        return 'default: prod';
+      default:
+        return 'default: master';
+    }
   });
 
   protected setPhase(v: string): void {
-    this.phase.set(v === 'MasterToProd' ? 'MasterToProd' : 'DevToMaster');
+    if (v === 'ProdToDev') this.phase.set('ProdToDev');
+    else if (v === 'MasterToProd') this.phase.set('MasterToProd');
+    else this.phase.set('DevToMaster');
     this.fromBranch.set('');
     this.toBranch.set('');
+  }
+
+  private phaseApiValue(phase: ReleasePrPhase): number {
+    if (phase === 'ProdToDev') return 2;
+    if (phase === 'MasterToProd') return 1;
+    return 0;
   }
 
   protected readonly selectedOrg = inject(SelectedOrgService);
@@ -339,7 +377,7 @@ export class ReleaseCreatePage implements OnInit {
         releaseId = release.id;
       }
 
-      const phase = this.phase() === 'MasterToProd' ? 1 : 0;
+      const phase = this.phaseApiValue(this.phase());
       const batchBase = {
         phase,
         title: this.prTitle(),

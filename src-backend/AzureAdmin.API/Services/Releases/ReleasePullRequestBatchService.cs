@@ -42,9 +42,6 @@ public sealed class ReleasePullRequestBatchService
             throw new InvalidOperationException("Team was not found.");
 
         request = SanitizeBranchOverrides(request);
-        if (request.Phase == ReleasePrPhase.ProdToDev)
-            throw new InvalidOperationException(
-                "Prod → dev pull requests are opened automatically when prod is ahead of dev.");
 
         var (activeRepos, skippedDecommissioned) = await LoadAndValidateReposAsync(teamId, request, cancellationToken);
         var userId = _currentUser.GetRequiredUserId();
@@ -88,6 +85,22 @@ public sealed class ReleasePullRequestBatchService
             var drift = await GetBranchDriftAsync(userId, repo, cancellationToken);
             if (drift.Error is not null)
                 issues.Add(drift.Error);
+            else if (request.Phase == ReleasePrPhase.ProdToDev)
+            {
+                if (!drift.ProdAhead)
+                {
+                    issues.Add(
+                        "prod is not ahead of dev — there is nothing to back-merge. " +
+                        "Use Dev → Master or Master → Prod once neither branch is ahead of dev.");
+                }
+                else
+                {
+                    var reason = DescribeDrift(drift);
+                    var backMergeIssue = await GetProdToDevBlockerAsync(releaseId, repo, reason, cancellationToken);
+                    if (backMergeIssue is not null)
+                        issues.Add(backMergeIssue);
+                }
+            }
             else if (drift.ProdAhead)
             {
                 var reason = DescribeDrift(drift);
@@ -97,7 +110,7 @@ public sealed class ReleasePullRequestBatchService
                 else
                 {
                     notices.Add(
-                        $"{reason}. The only pull request opened for this repository is prod → dev. " +
+                        $"{reason}. Select Prod → Dev (or continue — this batch will open prod → dev instead of {PromotionLabel(request.Phase)}). " +
                         "Dev → master and master → prod stay closed until prod is not ahead of dev.");
                 }
             }
@@ -105,7 +118,7 @@ public sealed class ReleasePullRequestBatchService
             {
                 issues.Add(
                     "master is ahead of dev, and prod is not. Neither master nor prod may contain commits that are not in dev " +
-                    "before a release promotion. Merge those master commits into dev before opening dev → master or master → prod.");
+                    "before a release promotion. Merge those master commits into dev before opening Dev → Master or Master → Prod.");
             }
             else
             {
@@ -174,9 +187,6 @@ public sealed class ReleasePullRequestBatchService
         await EnsureTeamEnrolledAsync(releaseId, teamId, cancellationToken);
 
         request = SanitizeBranchOverrides(request);
-        if (request.Phase == ReleasePrPhase.ProdToDev)
-            throw new InvalidOperationException(
-                "Prod → dev pull requests are opened automatically when prod is ahead of dev.");
 
         var (activeRepos, skippedDecommissioned) = await LoadAndValidateReposAsync(teamId, request, cancellationToken);
 
@@ -194,6 +204,46 @@ public sealed class ReleasePullRequestBatchService
             driftByRepoId[repo.Id] = drift;
         }
 
+        if (request.Phase == ReleasePrPhase.ProdToDev)
+        {
+            var notAhead = activeRepos
+                .Where(r => !driftByRepoId[r.Id].ProdAhead)
+                .Select(r => r.RepositoryIdOrName)
+                .ToList();
+            if (notAhead.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"prod is not ahead of dev in {string.Join(", ", notAhead)}. " +
+                    "Prod → Dev is only for repositories where prod has commits that are not in dev.");
+            }
+
+            await RemoveAbandonedOrMissingPullRequestRowsAsync(
+                userId,
+                releaseId,
+                ReleasePrPhase.ProdToDev,
+                activeRepos.Select(r => r.Id).ToList(),
+                cancellationToken);
+
+            var results = new List<CreatedPullRequestResult>();
+            foreach (var repo in activeRepos)
+            {
+                results.Add(await CreateStoredPullRequestAsync(
+                    userId,
+                    releaseId,
+                    teamId,
+                    repo,
+                    ReleasePrPhase.ProdToDev,
+                    sourceBranch,
+                    targetBranch,
+                    pullRequestTitle,
+                    request.Description,
+                    note: null,
+                    cancellationToken));
+            }
+
+            return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
+        }
+
         var masterBlocked = activeRepos
             .Where(r => driftByRepoId[r.Id].MasterAhead && !driftByRepoId[r.Id].ProdAhead)
             .Select(r => r.RepositoryIdOrName)
@@ -203,7 +253,7 @@ public sealed class ReleasePullRequestBatchService
             throw new InvalidOperationException(
                 $"master is ahead of dev in {string.Join(", ", masterBlocked)}. " +
                 "Neither master nor prod may be ahead of dev before a release promotion, and prod is not ahead of dev there. " +
-                "Merge those commits into dev before opening dev → master or master → prod.");
+                "Merge those commits into dev before opening Dev → Master or Master → Prod.");
         }
 
         var forwardRepos = activeRepos.Where(r => !driftByRepoId[r.Id].ProdAhead).ToList();
@@ -239,10 +289,10 @@ public sealed class ReleasePullRequestBatchService
                 cancellationToken);
         }
 
-        var results = new List<CreatedPullRequestResult>();
+        var created = new List<CreatedPullRequestResult>();
         foreach (var repo in forwardRepos)
         {
-            results.Add(await CreateStoredPullRequestAsync(
+            created.Add(await CreateStoredPullRequestAsync(
                 userId,
                 releaseId,
                 teamId,
@@ -266,7 +316,7 @@ public sealed class ReleasePullRequestBatchService
                 var note =
                     $"{reason}. Opened prod → dev instead of {promotionLabel}. " +
                     "Release promotions stay closed until prod is not ahead of dev. Merge this pull request, then run the promotion again.";
-                results.Add(await CreateStoredPullRequestAsync(
+                created.Add(await CreateStoredPullRequestAsync(
                     userId,
                     releaseId,
                     teamId,
@@ -281,7 +331,7 @@ public sealed class ReleasePullRequestBatchService
             }
         }
 
-        return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
+        return new BatchCreateReleasePullRequestsResponse(created, skippedDecommissioned);
     }
 
     private async Task<(List<RegisteredRepository> Active, List<string> SkippedDecommissioned)> LoadAndValidateReposAsync(
@@ -842,11 +892,18 @@ public sealed class ReleasePullRequestBatchService
         BatchCreateReleasePullRequestsRequest request)
     {
         if (request.Phase == ReleasePrPhase.MasterToProd &&
-            IsBranchPair(request.SourceBranch, request.TargetBranch, "dev", "master"))
+            (IsBranchPair(request.SourceBranch, request.TargetBranch, "dev", "master") ||
+             IsBranchPair(request.SourceBranch, request.TargetBranch, "prod", "dev")))
             return request with { SourceBranch = null, TargetBranch = null };
 
         if (request.Phase == ReleasePrPhase.DevToMaster &&
-            IsBranchPair(request.SourceBranch, request.TargetBranch, "master", "prod"))
+            (IsBranchPair(request.SourceBranch, request.TargetBranch, "master", "prod") ||
+             IsBranchPair(request.SourceBranch, request.TargetBranch, "prod", "dev")))
+            return request with { SourceBranch = null, TargetBranch = null };
+
+        if (request.Phase == ReleasePrPhase.ProdToDev &&
+            (IsBranchPair(request.SourceBranch, request.TargetBranch, "dev", "master") ||
+             IsBranchPair(request.SourceBranch, request.TargetBranch, "master", "prod")))
             return request with { SourceBranch = null, TargetBranch = null };
 
         return request;
@@ -900,7 +957,12 @@ public sealed class ReleasePullRequestBatchService
         if (!string.IsNullOrWhiteSpace(request.SourceBranch))
             return request.SourceBranch.Trim();
 
-        return request.Phase == ReleasePrPhase.DevToMaster ? "dev" : "master";
+        return request.Phase switch
+        {
+            ReleasePrPhase.DevToMaster => "dev",
+            ReleasePrPhase.ProdToDev => "prod",
+            _ => "master"
+        };
     }
 
     private static string ResolveTargetBranch(BatchCreateReleasePullRequestsRequest request)
@@ -908,6 +970,11 @@ public sealed class ReleasePullRequestBatchService
         if (!string.IsNullOrWhiteSpace(request.TargetBranch))
             return request.TargetBranch.Trim();
 
-        return request.Phase == ReleasePrPhase.DevToMaster ? "master" : "prod";
+        return request.Phase switch
+        {
+            ReleasePrPhase.DevToMaster => "master",
+            ReleasePrPhase.ProdToDev => "dev",
+            _ => "prod"
+        };
     }
 }

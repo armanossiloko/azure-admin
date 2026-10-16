@@ -43,6 +43,7 @@
       </div>
       <h1 class="page-title">{{ existingRelease() ? 'Add pull requests to this release' : 'Create team PRs for a release' }}</h1>
       <div style="display: flex; align-items: center; gap: 8px; margin-top: var(--s-2)">
+        <span class="badge draft" *ngIf="phase() === 'ProdToDev'">prod → dev</span>
         <span class="badge draft" *ngIf="phase() === 'DevToMaster'">dev → master</span>
         <span class="badge draft" *ngIf="phase() === 'MasterToProd'">master → prod</span>
         <span class="badge">multi-team</span>
@@ -72,7 +73,13 @@
 
       <div class="field" style="margin-bottom: var(--s-4)">
         <label class="field-label">Release phase</label>
-        <div style="display: flex; gap: var(--s-2)">
+        <div style="display: flex; flex-wrap: wrap; gap: var(--s-2)">
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
+                 [style.background]="phase() === 'ProdToDev' ? 'var(--bg-3)' : 'transparent'"
+                 [style.border-color]="phase() === 'ProdToDev' ? 'var(--primary)' : 'var(--border)'">
+            <input type="radio" name="phase" value="ProdToDev" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
+            <span style="font-size: 13px; font-weight: 500">Prod → Dev</span>
+          </label>
           <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
                  [style.background]="phase() === 'DevToMaster' ? 'var(--bg-3)' : 'transparent'"
                  [style.border-color]="phase() === 'DevToMaster' ? 'var(--primary)' : 'var(--border)'">
@@ -86,6 +93,11 @@
             <span style="font-size: 13px; font-weight: 500">Master → Prod</span>
           </label>
         </div>
+        @if (phase() === 'ProdToDev') {
+          <div class="muted" style="font-size: 12px; margin-top: var(--s-2)">
+            First step when prod drifted ahead of dev. Merge these PRs before starting Dev → Master.
+          </div>
+        }
         @if (phase() === 'MasterToProd') {
           <div class="muted" style="font-size: 12px; margin-top: var(--s-2)">
             Requires a completed Dev → Master pull request for each selected repository on this release.
@@ -102,11 +114,11 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-4)">
         <div class="field">
           <label class="field-label" for="from">From branch (optional)</label>
-          <input id="from" class="input mono" [ngModel]="fromBranch()" (ngModelChange)="fromBranch.set($event)" [placeholder]="phase() === 'DevToMaster' ? 'default: dev' : 'default: master'" />
+          <input id="from" class="input mono" [ngModel]="fromBranch()" (ngModelChange)="fromBranch.set($event)" [placeholder]="fromBranchPlaceholder()" />
         </div>
         <div class="field">
           <label class="field-label" for="to">To branch (optional)</label>
-          <input id="to" class="input mono" [ngModel]="toBranch()" (ngModelChange)="toBranch.set($event)" [placeholder]="phase() === 'DevToMaster' ? 'default: master' : 'default: prod'" />
+          <input id="to" class="input mono" [ngModel]="toBranch()" (ngModelChange)="toBranch.set($event)" [placeholder]="toBranchPlaceholder()" />
         </div>
         <div class="field">
           <label class="field-label" for="desc">Description (optional)</label>

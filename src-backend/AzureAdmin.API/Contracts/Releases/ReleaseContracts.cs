@@ -51,9 +51,9 @@ public sealed record BatchCreateReleasePullRequestsRequest(
     ReleasePrPhase Phase,
     string Title,
     string? Description,
-    /// <summary>When omitted, defaults to dev (DevToMaster) or master (MasterToProd).</summary>
+    /// <summary>When omitted, defaults to prod (ProdToDev), dev (DevToMaster), or master (MasterToProd).</summary>
     string? SourceBranch,
-    /// <summary>When omitted, defaults to master (DevToMaster) or prod (MasterToProd).</summary>
+    /// <summary>When omitted, defaults to dev (ProdToDev), master (DevToMaster), or prod (MasterToProd).</summary>
     string? TargetBranch,
     IReadOnlyList<Guid> RegisteredRepositoryIds);
 
