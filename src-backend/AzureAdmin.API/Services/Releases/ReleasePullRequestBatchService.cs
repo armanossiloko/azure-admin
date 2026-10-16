@@ -519,6 +519,7 @@ public sealed class ReleasePullRequestBatchService
             TeamId = teamId,
             RegisteredRepositoryId = repo.Id,
             Phase = phase,
+            Status = ReleasePullRequestStatus.Active,
             AzureDevOpsPullRequestId = created.PullRequestId,
             Url = created.Url,
             SourceRefName = sourceBranch,

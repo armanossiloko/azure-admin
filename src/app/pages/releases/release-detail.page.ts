@@ -158,7 +158,7 @@ export class ReleaseDetailPage implements OnInit {
     await this.loadRelease(id);
   }
 
-  protected async loadRelease(id: string): Promise<void> {
+  protected async loadRelease(id: string, options?: { syncStatuses?: boolean }): Promise<void> {
     this.error.set(null);
     try {
       const data = await firstValueFrom(this.http.get<ReleaseDetail>(`/api/releases/${id}`));
@@ -167,9 +167,32 @@ export class ReleaseDetailPage implements OnInit {
         commits: n.commits ?? []
       }));
       this.release.set(data);
+
+      if (options?.syncStatuses !== false && data.pullRequests.length > 0 && !this.isReleaseClosed(data.status)) {
+        void this.syncPrStatusesQuietly(id);
+      }
     } catch {
       this.error.set('Release not found or failed to load.');
       this.release.set(null);
+    }
+  }
+
+  /** Background ADO status sync after opening a release; failures stay silent. */
+  private async syncPrStatusesQuietly(releaseId: string): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.post<StatusRefreshResponse>(`/api/releases/${releaseId}/pull-requests/status-refresh`, {})
+      );
+      const data = await firstValueFrom(this.http.get<ReleaseDetail>(`/api/releases/${releaseId}`));
+      data.repositoryCommitNotes = (data.repositoryCommitNotes ?? []).map((n) => ({
+        ...n,
+        commits: n.commits ?? []
+      }));
+      if (this.release()?.id === releaseId) {
+        this.release.set(data);
+      }
+    } catch {
+      // Keep last known statuses; user can still click Check status.
     }
   }
 
@@ -378,7 +401,7 @@ export class ReleaseDetailPage implements OnInit {
       await firstValueFrom(
         this.http.post<StatusRefreshResponse>(`/api/releases/${rel.id}/pull-requests/status-refresh`, { phase })
       );
-      await this.loadRelease(rel.id);
+      await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('PR statuses updated from Azure DevOps.');
     } catch (e: unknown) {
       this.error.set(this.prettyError(e));

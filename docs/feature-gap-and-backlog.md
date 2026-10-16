@@ -38,9 +38,9 @@ These are **real missing product features**, not UI stubs. Former shell mocks (n
 
 Releases still create as `Draft`. Status moves via PATCH (`Start release` / close / archive), auto-promote to `Active` on first PR batch or completed PR, and `POST .../close` → `Completed`. Detail and list show lifecycle badges.
 
-### 2. Pull request status in the UI
+### 2. Pull request status in the UI — done
 
-ADO PR status is fetched only when replacing stale PR rows during batch create (`TryGetGitPullRequestStatusAsync`). It is **not** persisted on `ReleasePullRequest` and **not** shown on the release detail table (only title + “Open in ADO”).
+`ReleasePullRequest.Status` is persisted, shown on the release detail table, refreshed via **Check status** / `status-refresh`, and synced in the background when opening a release. New PR rows are stored as `Active`.
 
 ### 3. Editing and reassignment
 
