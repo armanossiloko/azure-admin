@@ -36,6 +36,73 @@
     </div>
   }
 
+  <!-- Branding -->
+  <div class="card" style="margin-bottom: var(--s-5)">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Branding</h3>
+        <p class="card-subtitle">Product name and copy shown in the shell, login page, and browser title.</p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" (click)="resetBrandingToDefaults()">
+        Reset to defaults
+      </button>
+    </div>
+    <div class="card-body" style="display: flex; flex-direction: column; gap: var(--s-4)">
+      <div class="field" style="max-width: 420px">
+        <label class="field-label" for="brandingName">Application name</label>
+        <input
+          id="brandingName"
+          type="text"
+          class="input"
+          [(ngModel)]="brandingName"
+          [placeholder]="brandingDefaults.applicationName"
+          maxlength="128"
+        />
+        <div class="field-hint">Leave blank to use the default ({{ brandingDefaults.applicationName }}).</div>
+      </div>
+      <div class="field" style="max-width: 420px">
+        <label class="field-label" for="brandingTagline">Tagline</label>
+        <input
+          id="brandingTagline"
+          type="text"
+          class="input"
+          [(ngModel)]="brandingTagline"
+          [placeholder]="brandingDefaults.tagline"
+          maxlength="256"
+        />
+        <div class="field-hint">Short line under the name in the top bar and login screen.</div>
+      </div>
+      <div class="field" style="max-width: 560px">
+        <label class="field-label" for="brandingDescription">Description</label>
+        <textarea
+          id="brandingDescription"
+          class="textarea"
+          rows="3"
+          [(ngModel)]="brandingDescription"
+          [placeholder]="brandingDefaults.description"
+          maxlength="1024"
+        ></textarea>
+        <div class="field-hint">Used on the login panel and as the page meta description.</div>
+      </div>
+      <div class="banner info" style="align-items: center">
+        <div class="banner-body" style="display: flex; align-items: center; gap: var(--s-3)">
+          <div class="brand-mark" aria-hidden="true">
+            <img src="brand/mark.svg" width="26" height="26" alt="" />
+          </div>
+          <div class="brand-name">
+            <div class="n">{{ brandingName.trim() || brandingDefaults.applicationName }}</div>
+            <div class="s">{{ brandingTagline.trim() || brandingDefaults.tagline }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Conventional Commits -->
   <div class="card" style="margin-bottom: var(--s-5)">
     <div class="card-header">

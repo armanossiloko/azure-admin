@@ -6,9 +6,12 @@
     (function () {
       try {
         var k = 'azure-admin-theme';
-        if (localStorage.getItem(k) === 'light') document.documentElement.setAttribute('data-theme', 'light');
-        else document.documentElement.removeAttribute('data-theme');
-      } catch (_) {}
+        var v = localStorage.getItem(k);
+        var theme = (v === 'light' || v === 'dark-blue' || v === 'dark') ? v : 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
     })();
   </script>
   <title>Azure Admin</title>

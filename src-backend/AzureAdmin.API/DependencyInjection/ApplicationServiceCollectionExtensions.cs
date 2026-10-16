@@ -1,5 +1,6 @@
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Services.AzureDevOps;
+using AzureAdmin.API.Services.Branding;
 using AzureAdmin.API.Services.Git;
 using AzureAdmin.API.Services.Health;
 using AzureAdmin.API.Services.Identity;
@@ -14,11 +15,13 @@ public static class ApplicationServiceCollectionExtensions
     {
         services.Configure<AzureDevOpsOptions>(configuration.GetSection("AzureDevOps"));
         services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
+        services.Configure<BrandingOptions>(configuration.GetSection(BrandingOptions.SectionName));
         services.AddOptions<PostgresOptions>()
             .Bind(configuration.GetSection(PostgresOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddScoped<IBrandingResolver, BrandingResolver>();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<KeycloakUserProvisioner>();
         services.AddScoped<AzureDevOpsOrganizationService>();

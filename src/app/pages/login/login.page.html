@@ -5,13 +5,13 @@
         <img src="brand/mark.svg" width="26" height="26" alt="" />
       </div>
       <div class="brand-name">
-        <div class="n">Azure Admin</div>
-        <div class="s">Release control</div>
+        <div class="n">{{ branding.branding().applicationName }}</div>
+        <div class="s">{{ branding.branding().tagline }}</div>
       </div>
     </div>
 
     <div class="auth-form">
-      <h1>Sign in to Azure Admin</h1>
+      <h1>Sign in to {{ branding.branding().applicationName }}</h1>
       <p class="sub">Continue with your organization SSO to manage releases, teams, and repositories.</p>
 
       <button
@@ -30,19 +30,16 @@
     </div>
 
     <div class="auth-foot">
-      <span>&copy; 2026 Azure Admin</span>
+      <span>&copy; {{ copyrightYear }} {{ branding.branding().applicationName }}</span>
     </div>
   </div>
 
   <div class="auth-side">
     <div class="auth-side-deco"></div>
     <div class="auth-quote">
-      <div class="num">01 — RELEASE CONTROL</div>
+      <div class="num">01 — {{ branding.branding().tagline | uppercase }}</div>
       <h2>Promote every service in one coordinated pass</h2>
-      <p>
-        Open promotion pull requests across teams and repositories, track each phase,
-        and keep Azure DevOps releases moving without the spreadsheet chase.
-      </p>
+      <p>{{ branding.branding().description }}</p>
     </div>
   </div>
 </div>

@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { SelectedOrgService } from '../../services/selected-org.service';
-import { ThemeService, type ThemeId } from '../../theme/theme.service';
+import { ThemeService, type ThemeId, parseThemeId, THEME_OPTIONS } from '../../theme/theme.service';
 
 type AccountSettings = {
   userId: string;
@@ -41,6 +41,7 @@ export class AccountSettingsPage implements OnInit {
   protected readonly organizations = signal<NavOrg[]>([]);
   protected readonly defaultOrganizationId = signal<string>('');
   protected readonly preferredTheme = signal<ThemeId>('dark');
+  protected readonly themeOptions = THEME_OPTIONS;
   protected readonly notifyPatExpiry = signal(true);
 
   async ngOnInit(): Promise<void> {
@@ -53,13 +54,17 @@ export class AccountSettingsPage implements OnInit {
       ]);
       this.organizations.set(nav.organizations ?? []);
       this.defaultOrganizationId.set(settings.defaultOrganizationId ?? '');
-      this.preferredTheme.set(settings.preferredTheme === 'light' ? 'light' : 'dark');
+      this.preferredTheme.set(parseThemeId(settings.preferredTheme) ?? 'dark');
       this.notifyPatExpiry.set(settings.notifyPatExpiry);
     } catch {
       this.error.set('Could not load account settings.');
     } finally {
       this.loading.set(false);
     }
+  }
+
+  protected onPreferredThemeChange(value: string): void {
+    this.preferredTheme.set(parseThemeId(value) ?? 'dark');
   }
 
   protected async save(): Promise<void> {

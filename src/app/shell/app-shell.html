@@ -12,8 +12,8 @@
         <img src="brand/mark.svg" width="26" height="26" alt="" />
       </div>
       <div class="brand-name">
-        <div class="n">Azure Admin</div>
-        <div class="s">Release control</div>
+        <div class="n">{{ branding.branding().applicationName }}</div>
+        <div class="s">{{ branding.branding().tagline }}</div>
       </div>
     </div>
 
@@ -122,15 +122,43 @@
           </ng-template>
         </div>
       </div>
-      <button class="icon-btn" (click)="toggleTheme()" aria-label="Toggle theme">
-        <svg *ngIf="theme.theme() === 'dark'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-          <circle cx="12" cy="12" r="4"/>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-        </svg>
-        <svg *ngIf="theme.theme() === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      </button>
+      <div style="position: relative" #themePanel>
+        <button
+          type="button"
+          class="icon-btn"
+          (click)="toggleThemeMenu(); $event.stopPropagation()"
+          [attr.aria-expanded]="themeMenuOpen()"
+          aria-haspopup="menu"
+          aria-label="Theme"
+          [title]="'Theme: ' + theme.labelFor()"
+        >
+          <svg *ngIf="theme.theme() === 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg *ngIf="theme.theme() !== 'light'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <div *ngIf="themeMenuOpen()" class="menu" role="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 180px">
+          <div style="padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Theme</div>
+          <button
+            type="button"
+            class="menu-item"
+            role="menuitemradio"
+            *ngFor="let opt of theme.options"
+            [class.active-theme]="theme.theme() === opt.id"
+            [attr.aria-checked]="theme.theme() === opt.id"
+            (click)="selectTheme(opt.id)"
+          >
+            <span class="theme-swatch" [style.background]="opt.swatch" aria-hidden="true"></span>
+            <span style="flex: 1">{{ opt.label }}</span>
+            <svg *ngIf="theme.theme() === opt.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
       <div style="width: 1px; height: 18px; background: var(--border); margin: 0 4px"></div>
       <div style="position: relative" #accountDropdown>
         <button 
@@ -243,7 +271,7 @@
 
     <div class="sidebar-footer">
       @if (navigation()?.appVersion; as ver) {
-        <div class="sidebar-version" title="Azure Admin version">v{{ ver }}</div>
+        <div class="sidebar-version" [attr.title]="branding.branding().applicationName + ' version'">v{{ ver }}</div>
       }
       <div
         class="org-switcher"

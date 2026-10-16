@@ -14,8 +14,9 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { BrandingService } from '../services/branding.service';
 import { SelectedOrgService } from '../services/selected-org.service';
-import { ThemeService } from '../theme/theme.service';
+import { ThemeService, type ThemeId, parseThemeId } from '../theme/theme.service';
 
 type DashboardActivityItem = {
   kind: string;
@@ -71,6 +72,7 @@ type AccountSettings = {
 export class AppShell implements OnInit {
   protected readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
+  protected readonly branding = inject(BrandingService);
   protected readonly selectedOrg = inject(SelectedOrgService);
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
@@ -78,6 +80,7 @@ export class AppShell implements OnInit {
   private readonly accountDropdown = viewChild<ElementRef<HTMLElement>>('accountDropdown');
   private readonly activityPanel = viewChild<ElementRef<HTMLElement>>('activityPanel');
   private readonly notificationsPanel = viewChild<ElementRef<HTMLElement>>('notificationsPanel');
+  private readonly themePanel = viewChild<ElementRef<HTMLElement>>('themePanel');
   private readonly orgSwitcher = viewChild<ElementRef<HTMLElement>>('orgSwitcher');
   private readonly searchPanel = viewChild<ElementRef<HTMLElement>>('searchPanel');
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
@@ -86,6 +89,7 @@ export class AppShell implements OnInit {
   protected readonly accountMenuOpen = signal(false);
   protected readonly activityMenuOpen = signal(false);
   protected readonly notificationsMenuOpen = signal(false);
+  protected readonly themeMenuOpen = signal(false);
   protected readonly orgMenuOpen = signal(false);
   protected readonly searchOpen = signal(false);
   protected readonly searchQuery = signal('');
@@ -147,9 +151,8 @@ export class AppShell implements OnInit {
       const settings = await firstValueFrom(
         this.http.get<AccountSettings>('/api/account/settings')
       );
-      if (settings.preferredTheme === 'light' || settings.preferredTheme === 'dark') {
-        this.theme.setTheme(settings.preferredTheme);
-      }
+      const preferred = parseThemeId(settings.preferredTheme);
+      if (preferred) this.theme.setTheme(preferred);
       const nav = this.navigation();
       if (!nav?.organizations.length) return;
       const stored = this.selectedOrg.readStored();
@@ -195,8 +198,15 @@ export class AppShell implements OnInit {
     this.sidebarMode.update(mode => (mode === 'expanded' ? 'icon' : 'expanded'));
   }
 
-  protected toggleTheme(): void {
-    this.theme.setTheme(this.theme.theme() === 'dark' ? 'light' : 'dark');
+  protected toggleThemeMenu(): void {
+    const next = !this.themeMenuOpen();
+    this.themeMenuOpen.set(next);
+    if (next) this.closeOtherPanels('theme');
+  }
+
+  protected selectTheme(id: ThemeId): void {
+    this.theme.setTheme(id);
+    this.themeMenuOpen.set(false);
   }
 
   protected toggleAccountMenu(): void {
@@ -312,10 +322,13 @@ export class AppShell implements OnInit {
     this.orgMenuOpen.set(false);
   }
 
-  private closeOtherPanels(except: 'account' | 'activity' | 'notifications' | 'org' | 'search'): void {
+  private closeOtherPanels(
+    except: 'account' | 'activity' | 'notifications' | 'theme' | 'org' | 'search'
+  ): void {
     if (except !== 'account') this.accountMenuOpen.set(false);
     if (except !== 'activity') this.activityMenuOpen.set(false);
     if (except !== 'notifications') this.notificationsMenuOpen.set(false);
+    if (except !== 'theme') this.themeMenuOpen.set(false);
     if (except !== 'org') this.orgMenuOpen.set(false);
     if (except !== 'search') this.searchOpen.set(false);
   }
@@ -354,6 +367,10 @@ export class AppShell implements OnInit {
       const panel = this.notificationsPanel()?.nativeElement;
       if (panel && !panel.contains(t)) this.notificationsMenuOpen.set(false);
     }
+    if (this.themeMenuOpen()) {
+      const panel = this.themePanel()?.nativeElement;
+      if (panel && !panel.contains(t)) this.themeMenuOpen.set(false);
+    }
     if (this.orgMenuOpen()) {
       const sw = this.orgSwitcher()?.nativeElement;
       if (sw && !sw.contains(t)) this.orgMenuOpen.set(false);
@@ -385,6 +402,7 @@ export class AppShell implements OnInit {
     if (this.accountMenuOpen()) this.accountMenuOpen.set(false);
     if (this.activityMenuOpen()) this.activityMenuOpen.set(false);
     if (this.notificationsMenuOpen()) this.notificationsMenuOpen.set(false);
+    if (this.themeMenuOpen()) this.themeMenuOpen.set(false);
     if (this.orgMenuOpen()) this.orgMenuOpen.set(false);
     if (this.searchOpen()) this.closeSearch();
   }

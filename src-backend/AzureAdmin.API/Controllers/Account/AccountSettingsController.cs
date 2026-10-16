@@ -67,8 +67,8 @@ public sealed class AccountSettingsController : ControllerBase
         }
 
         if (request.PreferredTheme is not null &&
-            request.PreferredTheme is not ("light" or "dark"))
-            return BadRequest("PreferredTheme must be 'light' or 'dark'.");
+            request.PreferredTheme is not ("light" or "dark" or "dark-blue"))
+            return BadRequest("PreferredTheme must be 'light', 'dark', or 'dark-blue'.");
 
         var prefs = await _db.UserPreferences.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
         if (prefs is null)

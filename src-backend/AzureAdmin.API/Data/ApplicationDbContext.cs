@@ -155,6 +155,9 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.HasKey(x => x.Id);
             e.Property(x => x.JiraBaseUrl).HasMaxLength(512);
             e.Property(x => x.JiraProjectKey).HasMaxLength(512);
+            e.Property(x => x.BrandingApplicationName).HasMaxLength(128);
+            e.Property(x => x.BrandingTagline).HasMaxLength(256);
+            e.Property(x => x.BrandingDescription).HasMaxLength(1024);
         });
 
         modelBuilder.Entity<UserNotification>(e =>

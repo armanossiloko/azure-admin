@@ -26,6 +26,15 @@ public sealed class AppSettings
     /// <summary>Comma-separated Jira project key prefixes, e.g. "BB_DEV,PLATFORM".</summary>
     public string? JiraProjectKey { get; set; }
 
+    /// <summary>Optional override for the product name. Null/empty uses Branding config, then built-in defaults.</summary>
+    public string? BrandingApplicationName { get; set; }
+
+    /// <summary>Optional override for the short tagline under the product name.</summary>
+    public string? BrandingTagline { get; set; }
+
+    /// <summary>Optional override for the longer product description (login / meta).</summary>
+    public string? BrandingDescription { get; set; }
+
     public IReadOnlySet<string> GetExcludedGroupsSet() =>
         string.IsNullOrWhiteSpace(ExcludedGroups)
             ? new HashSet<string>()
