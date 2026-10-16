@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { SelectedOrgService } from '../../services/selected-org.service';
 
 type Team = {
   id: string;
@@ -16,7 +17,9 @@ type Team = {
   imports: [CommonModule, FormsModule],
   templateUrl: './teams.page.html'
 })
-export class TeamsPage implements OnInit {
+export class TeamsPage {
+  private readonly selectedOrg = inject(SelectedOrgService);
+
   protected readonly teams = signal<Team[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
@@ -29,16 +32,21 @@ export class TeamsPage implements OnInit {
   protected readonly editName = signal('');
   protected readonly editParentId = signal('');
 
-  constructor(private readonly http: HttpClient) {}
-
-  async ngOnInit(): Promise<void> {
-    await this.refresh();
+  constructor(private readonly http: HttpClient) {
+    effect(() => {
+      this.selectedOrg.selectedOrgId();
+      void this.refresh();
+    });
   }
 
   protected async refresh(): Promise<void> {
     this.error.set(null);
     try {
-      const rows = await firstValueFrom(this.http.get<Team[]>('/api/teams'));
+      const params: Record<string, string> = {};
+      const orgId = this.selectedOrg.selectedOrgId();
+      if (orgId) params['organizationId'] = orgId;
+
+      const rows = await firstValueFrom(this.http.get<Team[]>('/api/teams', { params }));
       this.teams.set(rows ?? []);
     } catch {
       this.error.set('Failed to load teams.');

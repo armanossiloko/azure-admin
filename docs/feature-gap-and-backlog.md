@@ -51,9 +51,9 @@ Releases still create as `Draft`. Status moves via PATCH (`Start release` / clos
 | **Registered repos** | PATCH service name, decommissioned, **team reassignment** |
 | **Release PRs** | DELETE removes the row from the release (ADO PR untouched) |
 
-### 4. Org switcher — partial scoping
+### 4. Org switcher — scoping — done
 
-The switcher **does** filter registered repositories and related catalog/import flows. It **does not** filter releases, dashboard stats, or global team data. Releases remain org-agnostic in the model.
+The switcher filters registered repositories, catalog/import, release list, dashboard stats, **teams** (teams with repos in the org, plus teams with no repos), and **global search**. Releases stay org-agnostic in the model; membership is derived from repos/teams/PRs (empty drafts still appear under any org).
 
 ### 5. Shared (non–per-user) application data
 

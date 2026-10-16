@@ -18,20 +18,24 @@ public sealed class SearchController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly AzureDevOpsOrganizationService _organizations;
+    private readonly OrganizationScopeService _orgScope;
 
     public SearchController(
         ApplicationDbContext db,
         ICurrentUser currentUser,
-        AzureDevOpsOrganizationService organizations)
+        AzureDevOpsOrganizationService organizations,
+        OrganizationScopeService orgScope)
     {
         _db = db;
         _currentUser = currentUser;
         _organizations = organizations;
+        _orgScope = orgScope;
     }
 
     [HttpGet]
     public async Task<ActionResult<SearchResultDto>> Search(
         [FromQuery] string? q,
+        [FromQuery] Guid? organizationId,
         CancellationToken cancellationToken)
     {
         var term = (q ?? "").Trim();
@@ -42,9 +46,33 @@ public sealed class SearchController : ControllerBase
         var userId = _currentUser.GetRequiredUserId();
         var hits = new List<SearchHitDto>();
 
-        var releases = await _db.Releases.AsNoTracking()
+        OrganizationScope? scope = null;
+        HashSet<Guid>? matchingReleaseIds = null;
+        HashSet<Guid>? matchingTeamIds = null;
+        if (organizationId is { } orgId)
+        {
+            try
+            {
+                scope = await _orgScope.ResolveAsync(orgId, userId, cancellationToken);
+                if (scope is not null)
+                {
+                    matchingReleaseIds = await _orgScope.GetMatchingReleaseIdsAsync(scope, cancellationToken);
+                    matchingTeamIds = await _orgScope.GetMatchingTeamIdsAsync(scope, cancellationToken);
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        var releaseQuery = _db.Releases.AsNoTracking()
             .Where(r => EF.Functions.ILike(r.Title, pattern) ||
-                        (r.SprintLabel != null && EF.Functions.ILike(r.SprintLabel, pattern)))
+                        (r.SprintLabel != null && EF.Functions.ILike(r.SprintLabel, pattern)));
+        if (matchingReleaseIds is not null)
+            releaseQuery = releaseQuery.Where(r => matchingReleaseIds.Contains(r.Id));
+
+        var releases = await releaseQuery
             .OrderByDescending(r => r.CreatedAt)
             .Take(6)
             .Select(r => new SearchHitDto(
@@ -55,19 +83,27 @@ public sealed class SearchController : ControllerBase
             .ToListAsync(cancellationToken);
         hits.AddRange(releases);
 
-        var teams = await _db.Teams.AsNoTracking()
-            .Where(t => EF.Functions.ILike(t.Name, pattern))
+        var teamQuery = _db.Teams.AsNoTracking()
+            .Where(t => EF.Functions.ILike(t.Name, pattern));
+        if (matchingTeamIds is not null)
+            teamQuery = teamQuery.Where(t => matchingTeamIds.Contains(t.Id));
+
+        var teams = await teamQuery
             .OrderBy(t => t.Name)
             .Take(5)
             .Select(t => new SearchHitDto("team", t.Name, null, "/teams"))
             .ToListAsync(cancellationToken);
         hits.AddRange(teams);
 
-        var repos = await _db.RegisteredRepositories.AsNoTracking()
+        var repoQuery = _db.RegisteredRepositories.AsNoTracking()
             .Where(r => EF.Functions.ILike(r.RepositoryIdOrName, pattern) ||
                         EF.Functions.ILike(r.AzureDevOpsProject, pattern) ||
                         EF.Functions.ILike(r.AzureDevOpsOrganization, pattern) ||
-                        (r.ServiceName != null && EF.Functions.ILike(r.ServiceName, pattern)))
+                        (r.ServiceName != null && EF.Functions.ILike(r.ServiceName, pattern)));
+        if (scope is not null)
+            repoQuery = _orgScope.FilterRepositories(repoQuery, scope);
+
+        var repos = await repoQuery
             .OrderBy(r => r.AzureDevOpsOrganization)
             .ThenBy(r => r.RepositoryIdOrName)
             .Take(6)

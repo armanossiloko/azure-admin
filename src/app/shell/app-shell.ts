@@ -116,7 +116,10 @@ export class AppShell implements OnInit {
             this.searchBusy.set(false);
             return of({ hits: [] as SearchHit[] });
           }
-          return this.http.get<{ hits: SearchHit[] }>('/api/search', { params: { q: term } });
+          const params: Record<string, string> = { q: term };
+          const orgId = this.selectedOrg.selectedOrgId();
+          if (orgId) params['organizationId'] = orgId;
+          return this.http.get<{ hits: SearchHit[] }>('/api/search', { params });
         })
       )
       .subscribe({

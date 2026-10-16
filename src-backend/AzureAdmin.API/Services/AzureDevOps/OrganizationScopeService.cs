@@ -47,6 +47,32 @@ public sealed class OrganizationScopeService
             r.AzureDevOpsOrganization.ToLower() == scope.Key);
 
     /// <summary>
+    /// Teams that own at least one registered repository in the org.
+    /// Teams with no repositories are included so new orgs can still assign repos.
+    /// </summary>
+    public async Task<HashSet<Guid>> GetMatchingTeamIdsAsync(
+        OrganizationScope scope,
+        CancellationToken cancellationToken)
+    {
+        var withOrgRepos = await FilterRepositories(_db.RegisteredRepositories.AsNoTracking(), scope)
+            .Select(r => r.TeamId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var teamsWithAnyRepo = await _db.RegisteredRepositories.AsNoTracking()
+            .Select(r => r.TeamId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var teamsWithNoRepos = await _db.Teams.AsNoTracking()
+            .Where(t => !teamsWithAnyRepo.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        return withOrgRepos.Concat(teamsWithNoRepos).ToHashSet();
+    }
+
+    /// <summary>
     /// Releases tied to the org via PRs or enrolled teams' repos, plus empty drafts (no teams/PRs yet).
     /// </summary>
     public async Task<HashSet<Guid>> GetMatchingReleaseIdsAsync(

@@ -1,6 +1,8 @@
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
+using AzureAdmin.API.Services.AzureDevOps;
+using AzureAdmin.API.Services.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,17 +15,44 @@ namespace AzureAdmin.API.Controllers.Teams;
 public sealed class TeamsController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly ICurrentUser _currentUser;
+    private readonly OrganizationScopeService _orgScope;
 
-    public TeamsController(ApplicationDbContext db)
+    public TeamsController(
+        ApplicationDbContext db,
+        ICurrentUser currentUser,
+        OrganizationScopeService orgScope)
     {
         _db = db;
+        _currentUser = currentUser;
+        _orgScope = orgScope;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<TeamDto>>> List(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<TeamDto>>> List(
+        [FromQuery] Guid? organizationId,
+        CancellationToken cancellationToken)
     {
-        var rows = await _db.Teams
-            .AsNoTracking()
+        var query = _db.Teams.AsNoTracking().AsQueryable();
+
+        if (organizationId is { } orgId)
+        {
+            try
+            {
+                var scope = await _orgScope.ResolveAsync(orgId, _currentUser.GetRequiredUserId(), cancellationToken);
+                if (scope is null)
+                    return BadRequest(new { message = "Organization was not found." });
+
+                var matchingIds = await _orgScope.GetMatchingTeamIdsAsync(scope, cancellationToken);
+                query = query.Where(t => matchingIds.Contains(t.Id));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        var rows = await query
             .OrderBy(t => t.Name)
             .Select(t => new TeamDto(t.Id, t.Name, t.ParentTeamId))
             .ToListAsync(cancellationToken);
