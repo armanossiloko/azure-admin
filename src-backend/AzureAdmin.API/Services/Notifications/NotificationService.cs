@@ -123,4 +123,36 @@ public sealed class NotificationService
         return await _db.UserNotifications.AsNoTracking()
             .CountAsync(n => n.UserId == userId && n.ReadAt == null, cancellationToken);
     }
+
+    /// <summary>
+    /// Inserts an in-app notification once per <paramref name="dedupeKey"/> for the current user.
+    /// Existing rows are left unchanged (no re-alert on repeat sync).
+    /// </summary>
+    public async Task NotifyOnceAsync(
+        string kind,
+        string dedupeKey,
+        string title,
+        string? body,
+        string? href,
+        CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.GetRequiredUserId();
+        var exists = await _db.UserNotifications.AsNoTracking()
+            .AnyAsync(n => n.UserId == userId && n.DedupeKey == dedupeKey, cancellationToken);
+        if (exists)
+            return;
+
+        _db.UserNotifications.Add(new UserNotification
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            DedupeKey = dedupeKey,
+            Kind = kind,
+            Title = title,
+            Body = body,
+            Href = href,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -4,6 +4,7 @@ using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
+using AzureAdmin.API.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace AzureAdmin.API.Services.Releases;
@@ -14,17 +15,20 @@ public sealed class ReleasePullRequestBatchService
     private readonly AzureDevOpsClient _ado;
     private readonly ICurrentUser _currentUser;
     private readonly ReleaseCommitNotesService _commitNotes;
+    private readonly NotificationService _notifications;
 
     public ReleasePullRequestBatchService(
         ApplicationDbContext db,
         AzureDevOpsClient ado,
         ICurrentUser currentUser,
-        ReleaseCommitNotesService commitNotes)
+        ReleaseCommitNotesService commitNotes,
+        NotificationService notifications)
     {
         _db = db;
         _ado = ado;
         _currentUser = currentUser;
         _commitNotes = commitNotes;
+        _notifications = notifications;
     }
 
     public async Task<BatchPreflightResponse> PreflightPullRequestsForReleaseAsync(
@@ -608,6 +612,11 @@ public sealed class ReleasePullRequestBatchService
     {
         var userId = _currentUser.GetRequiredUserId();
 
+        var releaseTitle = await _db.Releases.AsNoTracking()
+            .Where(r => r.Id == releaseId)
+            .Select(r => r.Title)
+            .FirstOrDefaultAsync(cancellationToken) ?? "Release";
+
         var prs = await _db.ReleasePullRequests
             .Where(pr => pr.ReleaseId == releaseId && pr.Phase == phase)
             .Include(pr => pr.RegisteredRepository)
@@ -642,6 +651,7 @@ public sealed class ReleasePullRequestBatchService
                 if (pr.Status == ReleasePullRequestStatus.Completed)
                 {
                     await _db.SaveChangesAsync(cancellationToken);
+                    await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
                     results.Add(new CompletedPullRequestResult(
                         repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, "Already completed."));
                     continue;
@@ -676,6 +686,7 @@ public sealed class ReleasePullRequestBatchService
 
                 pr.Status = ReleasePullRequestStatus.Completed;
                 await _db.SaveChangesAsync(cancellationToken);
+                await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
 
                 results.Add(new CompletedPullRequestResult(
                     repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, null));
@@ -687,6 +698,7 @@ public sealed class ReleasePullRequestBatchService
             }
         }
 
+        await NotifyBatchFailuresAsync(releaseId, releaseTitle, phase, results, cancellationToken);
         await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
         return results;
     }
@@ -702,6 +714,11 @@ public sealed class ReleasePullRequestBatchService
     {
         var userId = _currentUser.GetRequiredUserId();
 
+        var releaseTitle = await _db.Releases.AsNoTracking()
+            .Where(r => r.Id == releaseId)
+            .Select(r => r.Title)
+            .FirstOrDefaultAsync(cancellationToken) ?? "Release";
+
         var query = _db.ReleasePullRequests.Where(pr => pr.ReleaseId == releaseId);
         if (phase is { } p)
             query = query.Where(pr => pr.Phase == p);
@@ -712,6 +729,7 @@ public sealed class ReleasePullRequestBatchService
         foreach (var pr in prs)
         {
             var repo = pr.RegisteredRepository;
+            var previous = pr.Status;
             try
             {
                 var status = await _ado.TryGetGitPullRequestStatusAsync(
@@ -724,6 +742,12 @@ public sealed class ReleasePullRequestBatchService
 
                 pr.Status = ReleasePullRequestStatusMapper.Map(status);
                 await _db.SaveChangesAsync(cancellationToken);
+
+                if (previous != ReleasePullRequestStatus.Completed &&
+                    pr.Status == ReleasePullRequestStatus.Completed)
+                {
+                    await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
+                }
             }
             catch (HttpRequestException)
             {
@@ -735,6 +759,57 @@ public sealed class ReleasePullRequestBatchService
 
         await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
         return results;
+    }
+
+    private async Task NotifyPrMergedAsync(
+        Guid releaseId,
+        string releaseTitle,
+        ReleasePullRequest pr,
+        RegisteredRepository repo,
+        CancellationToken cancellationToken)
+    {
+        var label = string.IsNullOrWhiteSpace(repo.ServiceName) ? repo.RepositoryIdOrName : repo.ServiceName;
+        await _notifications.NotifyOnceAsync(
+            kind: "pr_merged",
+            dedupeKey: $"pr_merged:{pr.Id}",
+            title: $"PR merged — {label}",
+            body: $"#{pr.AzureDevOpsPullRequestId} on \"{releaseTitle}\" is completed in Azure DevOps.",
+            href: $"/releases/{releaseId}",
+            cancellationToken);
+    }
+
+    private async Task NotifyBatchFailuresAsync(
+        Guid releaseId,
+        string releaseTitle,
+        ReleasePrPhase phase,
+        IReadOnlyList<CompletedPullRequestResult> results,
+        CancellationToken cancellationToken)
+    {
+        var failed = results.Where(r => !r.Success).ToList();
+        if (failed.Count == 0)
+            return;
+
+        var phaseLabel = phase switch
+        {
+            ReleasePrPhase.DevToMaster => "Dev → Master",
+            ReleasePrPhase.MasterToProd => "Master → Prod",
+            ReleasePrPhase.ProdToDev => "Prod → Dev",
+            _ => phase.ToString()
+        };
+
+        var detail = string.Join(
+            " · ",
+            failed.Take(5).Select(f => $"{f.RepositoryIdOrName}: {f.Message ?? "failed"}"));
+        if (failed.Count > 5)
+            detail += $" · +{failed.Count - 5} more";
+
+        await _notifications.NotifyOnceAsync(
+            kind: "batch_failure",
+            dedupeKey: $"batch_failure:{releaseId}:{phase}:{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
+            title: $"Batch complete failed — {phaseLabel}",
+            body: $"{failed.Count} of {results.Count} PRs failed on \"{releaseTitle}\". {detail}",
+            href: $"/releases/{releaseId}",
+            cancellationToken);
     }
 
     /// <summary>

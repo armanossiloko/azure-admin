@@ -20,6 +20,7 @@ The core product described in the [README](../README.md) is largely in place:
 | **Dashboard** | Stats, onboarding checklist, recent activity (org-scoped when selected) |
 | **In-app notifications** | `UserNotification` store, `/api/notifications`, bell panel with unread badge |
 | **PAT expiry reminders** | In-app when PAT is expired or within 14 days; toggle via account settings |
+| **PR / batch notifications** | In-app `pr_merged` and `batch_failure` (complete-batch and create-batch errors) |
 | **Account settings** | `/settings/account` — profile, default org, theme, PAT notification preference |
 | **Global search** | Topbar search (`/api/search`), org-scoped when an org is selected |
 | **Organization switcher** | Scopes repos, teams, releases, dashboard, search, catalog/import |
@@ -41,10 +42,6 @@ Only Azure organizations and PATs are tied to `UserId`. **Teams, releases, regis
 
 `AppSettings` is a **single global row** (`SingletonId = 1`), not per user or per org.
 
-### 8. Notification types beyond PAT
-
-The notification store supports arbitrary kinds, but only **PAT expired** and **PAT expiring soon** are generated today. PR merged, batch failures, and similar events are not wired yet.
-
 ### Recently closed gaps
 
 | Item | Notes |
@@ -55,6 +52,7 @@ The notification store supports arbitrary kinds, but only **PAT expired** and **
 | **4. Org switcher scoping** | Releases, dashboard, teams, search |
 | **6. Automated tests** | Backend unit tests + fixed frontend spec |
 | **7. Documentation** | [setup.md](setup.md) |
+| **8. Notification types beyond PAT** | `pr_merged`, `batch_failure` (in-app only; no email) |
 
 ---
 
@@ -65,10 +63,9 @@ The notification store supports arbitrary kinds, but only **PAT expired** and **
 
 ### Summary of gaps
 
-Largest **remaining** product gaps:
+Largest **remaining** product gap:
 
-- Multi-user / multi-tenant data isolation (if needed)
-- Broader in-app notification sources (PR/batch events)
+- Multi-user / multi-tenant data isolation (if needed) — skipped for now by product choice
 
 ---
 
@@ -80,7 +77,6 @@ Largest **remaining** product gaps:
 |------|----------------|
 | **Per-user or per-org tenancy** | Today teams/releases/settings are shared by all users; scope data if multiple squads use one instance. |
 | **Per-user / per-org app settings** | Replace global `AppSettings` singleton if different squads need different Jira/commit rules. |
-| **More notification kinds** | PR merged, batch failures, etc., in existing `UserNotification` store (in-app only). |
 | **Deeper tests** | API integration tests (releases, PAT, batch PR), frontend tests for critical flows. |
 
 ### Recently closed (formerly stubbed or gap items)
@@ -94,6 +90,7 @@ Largest **remaining** product gaps:
 | **Org switcher that scopes data** | Done for repos, teams, releases, dashboard, search. |
 | **Release lifecycle / PR status / editing** | Done — see closed gaps above. |
 | **Setup docs** | Done — [setup.md](setup.md). |
+| **More notification kinds** | Done — `pr_merged`, `batch_failure` (in-app). |
 | **Remove registration dead code** | Done — Keycloak-only. |
 
 ### Release & PR workflow
@@ -203,20 +200,19 @@ Largest **remaining** product gaps:
 
 ### High impact, fits current app
 
-1. More in-app notification kinds (PR/batch events)  
-2. Org-scoped or per-user data (if multiple squads share one deploy)
+1. Org-scoped or per-user data (if multiple squads share one deploy)
 
 ### Medium effort, strong workflow value
 
-3. “All dev PRs merged” gate configurability  
-4. PR webhooks from ADO  
-5. Slack/Teams on batch complete  
+2. “All dev PRs merged” gate configurability  
+3. PR webhooks from ADO  
+4. Slack/Teams on batch complete  
 
 ### Polish & scale
 
-6. RBAC + audit log  
-7. API for CI  
-8. Deeper integration / E2E tests  
+5. RBAC + audit log  
+6. API for CI  
+7. Deeper integration / E2E tests  
 
 ---
 

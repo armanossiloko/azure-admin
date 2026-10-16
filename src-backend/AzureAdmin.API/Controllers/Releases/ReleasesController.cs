@@ -4,6 +4,7 @@ using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
+using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,7 @@ public sealed class ReleasesController : ControllerBase
     private readonly ConventionalCommitParser _commitParser;
     private readonly JiraReferenceExtractor _jiraExtractor;
     private readonly OrganizationScopeService _orgScope;
+    private readonly NotificationService _notifications;
 
     public ReleasesController(
         ApplicationDbContext db,
@@ -31,7 +33,8 @@ public sealed class ReleasesController : ControllerBase
         ICurrentUser currentUser,
         ConventionalCommitParser commitParser,
         JiraReferenceExtractor jiraExtractor,
-        OrganizationScopeService orgScope)
+        OrganizationScopeService orgScope,
+        NotificationService notifications)
     {
         _db = db;
         _batchService = batchService;
@@ -40,6 +43,7 @@ public sealed class ReleasesController : ControllerBase
         _commitParser = commitParser;
         _jiraExtractor = jiraExtractor;
         _orgScope = orgScope;
+        _notifications = notifications;
     }
 
     [HttpGet]
@@ -285,12 +289,42 @@ public sealed class ReleasesController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
+            await NotifyBatchCreateFailureAsync(releaseId, request.Phase, ex.Message, cancellationToken);
             return BadRequest(new { message = ex.Message });
         }
         catch (HttpRequestException ex)
         {
+            await NotifyBatchCreateFailureAsync(releaseId, request.Phase, ex.Message, cancellationToken);
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    private async Task NotifyBatchCreateFailureAsync(
+        Guid releaseId,
+        ReleasePrPhase phase,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var title = await _db.Releases.AsNoTracking()
+            .Where(r => r.Id == releaseId)
+            .Select(r => r.Title)
+            .FirstOrDefaultAsync(cancellationToken) ?? "Release";
+
+        var phaseLabel = phase switch
+        {
+            ReleasePrPhase.DevToMaster => "Dev → Master",
+            ReleasePrPhase.MasterToProd => "Master → Prod",
+            ReleasePrPhase.ProdToDev => "Prod → Dev",
+            _ => phase.ToString()
+        };
+
+        await _notifications.NotifyOnceAsync(
+            kind: "batch_failure",
+            dedupeKey: $"batch_create_failure:{releaseId}:{phase}:{DateTimeOffset.UtcNow:yyyyMMddHHmmss}",
+            title: $"PR batch failed — {phaseLabel}",
+            body: $"Could not create PRs for \"{title}\": {message}",
+            href: $"/releases/{releaseId}",
+            cancellationToken);
     }
 
     [HttpPatch("{id:guid}")]
