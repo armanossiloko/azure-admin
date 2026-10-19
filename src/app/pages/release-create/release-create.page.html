@@ -31,10 +31,10 @@
   <div class="page-header">
     <div class="titles">
       <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
-        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
+        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
         <span style="color: var(--text-4); font-size: 13px">/</span>
         @if (existingRelease(); as er2) {
-          <a [routerLink]="['/releases', er2.id]" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">{{ er2.title }}</a>
+          <a [routerLink]="['/releases', er2.id]" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">{{ er2.title }}</a>
           <span style="color: var(--text-4); font-size: 13px">/</span>
           <span style="color: var(--text-2); font-size: 13px">Add PRs</span>
         } @else {
@@ -76,19 +76,19 @@
         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2)">
           <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
                  [style.background]="phase() === 'ProdToDev' ? 'var(--bg-3)' : 'transparent'"
-                 [style.border-color]="phase() === 'ProdToDev' ? 'var(--primary)' : 'var(--border)'">
+                 [style.border-color]="phase() === 'ProdToDev' ? 'var(--accent)' : 'var(--border)'">
             <input type="radio" name="phase" value="ProdToDev" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
             <span style="font-size: 13px; font-weight: 500">Prod → Dev</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
                  [style.background]="phase() === 'DevToMaster' ? 'var(--bg-3)' : 'transparent'"
-                 [style.border-color]="phase() === 'DevToMaster' ? 'var(--primary)' : 'var(--border)'">
+                 [style.border-color]="phase() === 'DevToMaster' ? 'var(--accent)' : 'var(--border)'">
             <input type="radio" name="phase" value="DevToMaster" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
             <span style="font-size: 13px; font-weight: 500">Dev → Master</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
                  [style.background]="phase() === 'MasterToProd' ? 'var(--bg-3)' : 'transparent'"
-                 [style.border-color]="phase() === 'MasterToProd' ? 'var(--primary)' : 'var(--border)'">
+                 [style.border-color]="phase() === 'MasterToProd' ? 'var(--accent)' : 'var(--border)'">
             <input type="radio" name="phase" value="MasterToProd" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
             <span style="font-size: 13px; font-weight: 500">Master → Prod</span>
           </label>
@@ -281,7 +281,7 @@
                 <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px">{{ c.repositoryIdOrName }}</div>
                 <div class="muted" style="font-size: 11px">PR #{{ c.pullRequestId }}</div>
                 @if (c.note) {
-                  <div style="font-size: 12px; margin-top: 4px; color: var(--warning, #b45309)">{{ c.note }}</div>
+                  <div style="font-size: 12px; margin-top: 4px; color: var(--warn)">{{ c.note }}</div>
                 }
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">

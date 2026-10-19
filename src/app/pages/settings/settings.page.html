@@ -146,7 +146,7 @@
               @for (group of allGroups; track group.name) {
                 <label
                   class="row"
-                  style="gap: var(--s-2); cursor: pointer; align-items: center; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--bg-2)"
+                  style="gap: var(--s-2); cursor: pointer; align-items: center; padding: 6px 8px; border-radius: var(--r-2); background: var(--bg-2)"
                   [style.opacity]="group.alwaysIncluded ? '0.6' : '1'"
                 >
                   <input
@@ -242,14 +242,14 @@
               <div style="display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-2)">
                 @for (key of form.jiraProjectKeys; track key) {
                   <span
-                    style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-2); font-size: 12.5px; font-weight: 500"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--r-2); background: var(--bg-2); font-size: 12.5px; font-weight: 500"
                   >
                     {{ key }}
                     <button
                       type="button"
                       (click)="removeJiraProjectKey(key)"
                       aria-label="Remove {{ key }}"
-                      style="display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--muted); cursor: pointer; padding: 0; line-height: 1"
+                      style="display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-3); cursor: pointer; padding: 0; line-height: 1"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"/>

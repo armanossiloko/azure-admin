@@ -2,7 +2,7 @@
   <div class="page-header">
     <div class="titles">
       <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
-        <a routerLink="/settings/azure-organizations" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text-1)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Azure organizations</a>
+        <a routerLink="/settings/azure-organizations" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Azure organizations</a>
         <span style="color: var(--text-4); font-size: 13px">/</span>
         <span style="color: var(--text-2); font-size: 13px">{{ o.organizationDisplay || o.organizationKey }}</span>
       </div>
