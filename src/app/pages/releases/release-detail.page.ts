@@ -514,13 +514,22 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
+  /** PRs that can still be opened or merged (skip Completed / Abandoned). */
+  protected mergeablePullRequestsInPhase(
+    prs: ReleasePullRequest[],
+    bucket: PhaseBucketKey | 'other'
+  ): ReleasePullRequest[] {
+    return this.pullRequestsInPhase(prs, bucket).filter(
+      (p) => p.status === 'Active' || p.status === 'Unknown'
+    );
+  }
+
   protected openAllPrs(phaseKey: PhaseBucketKey): void {
     const rel = this.release();
     if (!rel) return;
 
-    // Skip Completed/Abandoned; prefer Active if the browser only allows one tab.
-    const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey)
-      .filter((p) => p.status === 'Active' || p.status === 'Unknown')
+    // Prefer Active if the browser only allows one tab.
+    const prs = this.mergeablePullRequestsInPhase(rel.pullRequests, phaseKey)
       .sort((a, b) => Number(b.status === 'Active') - Number(a.status === 'Active'));
 
     if (!prs.length) {
@@ -544,12 +553,15 @@ export class ReleaseDetailPage implements OnInit {
   protected async completeAllPrs(phaseKey: PhaseBucketKey): Promise<void> {
     const rel = this.release();
     if (!rel) return;
-    const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey);
-    if (!prs.length) return;
+    const prs = this.mergeablePullRequestsInPhase(rel.pullRequests, phaseKey);
+    if (!prs.length) {
+      this.copyMessage.set('No active PRs in this phase to complete.');
+      return;
+    }
 
     const phaseTitle = this.prPhaseBuckets.find((b) => b.key === phaseKey)?.title ?? phaseKey;
     const confirmed = confirm(
-      `Complete (rebase and fast-forward) all ${prs.length} PR${prs.length === 1 ? '' : 's'} in "${phaseTitle}"?\n\n` +
+      `Complete (rebase and fast-forward) ${prs.length} active PR${prs.length === 1 ? '' : 's'} in "${phaseTitle}"?\n\n` +
         'This merges directly in Azure DevOps and cannot be undone from here.'
     );
     if (!confirmed) return;

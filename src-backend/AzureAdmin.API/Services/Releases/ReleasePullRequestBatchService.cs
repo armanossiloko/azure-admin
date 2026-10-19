@@ -648,21 +648,11 @@ public sealed class ReleasePullRequestBatchService
                 // Keep the locally stored status in sync with Azure DevOps regardless of outcome below.
                 pr.Status = ReleasePullRequestStatusMapper.Map(snapshot.Status);
 
-                if (pr.Status == ReleasePullRequestStatus.Completed)
+                // Already done or abandoned — not merge candidates. Skip quietly so Complete-all
+                // does not inflate counts or emit batch_failure noise for non-active PRs.
+                if (pr.Status is ReleasePullRequestStatus.Completed or ReleasePullRequestStatus.Abandoned)
                 {
                     await _db.SaveChangesAsync(cancellationToken);
-                    await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
-                    results.Add(new CompletedPullRequestResult(
-                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, "Already completed."));
-                    continue;
-                }
-
-                if (pr.Status == ReleasePullRequestStatus.Abandoned)
-                {
-                    await _db.SaveChangesAsync(cancellationToken);
-                    results.Add(new CompletedPullRequestResult(
-                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
-                        "Pull request was abandoned in Azure DevOps."));
                     continue;
                 }
 
