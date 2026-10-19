@@ -36,8 +36,7 @@ jobs:
       - name: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # conventionalcommits preset (used in .releaserc.json) is a separate package
-        run: npx --yes -p semantic-release@25 -p conventional-changelog-conventionalcommits semantic-release
+        run: npx --yes semantic-release@25
 
       # Empty when there was nothing to release (only chore/docs/ci/etc. commits — style/perf do release).
       # Reading the tag on HEAD (instead of parsing semantic-release output) also makes re-runs work.
