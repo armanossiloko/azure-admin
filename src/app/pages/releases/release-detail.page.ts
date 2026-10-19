@@ -517,8 +517,27 @@ export class ReleaseDetailPage implements OnInit {
   protected openAllPrs(phaseKey: PhaseBucketKey): void {
     const rel = this.release();
     if (!rel) return;
-    for (const pr of this.pullRequestsInPhase(rel.pullRequests, phaseKey)) {
-      window.open(pr.url, '_blank', 'noopener');
+
+    // Skip Completed/Abandoned; prefer Active if the browser only allows one tab.
+    const prs = this.pullRequestsInPhase(rel.pullRequests, phaseKey)
+      .filter((p) => p.status === 'Active' || p.status === 'Unknown')
+      .sort((a, b) => Number(b.status === 'Active') - Number(a.status === 'Active'));
+
+    if (!prs.length) {
+      this.copyMessage.set('No active PRs in this phase to open.');
+      return;
+    }
+
+    // Avoid window.open(..., features): a features string is treated as a popup
+    // and browsers usually allow only one per click. Synchronous <a> clicks open tabs.
+    for (const pr of prs) {
+      const a = document.createElement('a');
+      a.href = pr.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }
   }
 
