@@ -528,6 +528,8 @@ export class ReleaseDetailPage implements OnInit {
     const rel = this.release();
     if (!rel) return;
 
+    const phaseTitle = this.prPhaseBuckets.find((b) => b.key === phaseKey)?.title ?? phaseKey;
+
     // Prefer Active if the browser only allows one tab.
     const prs = this.mergeablePullRequestsInPhase(rel.pullRequests, phaseKey)
       .sort((a, b) => Number(b.status === 'Active') - Number(a.status === 'Active'));
@@ -537,17 +539,27 @@ export class ReleaseDetailPage implements OnInit {
       return;
     }
 
-    // Avoid window.open(..., features): a features string is treated as a popup
-    // and browsers usually allow only one per click. Synchronous <a> clicks open tabs.
+    // Most browsers only let one popup through per click; the rest return null and are
+    // silently dropped, with no exception and no event to react to. Open each as an empty,
+    // same-origin window first — that lets us tell blocked from opened (the anchor-click
+    // trick used before this could not) — then sever window.opener (equivalent to noopener,
+    // done this way so the detection above still works) and navigate it to the PR.
+    let opened = 0;
     for (const pr of prs) {
-      const a = document.createElement('a');
-      a.href = pr.url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const win = window.open('', '_blank');
+      if (!win) continue;
+      opened++;
+      win.opener = null;
+      win.location.href = pr.url;
     }
+
+    const blocked = prs.length - opened;
+    this.copyMessage.set(
+      blocked === 0
+        ? `Opened ${opened} PR${opened === 1 ? '' : 's'} in "${phaseTitle}".`
+        : `Opened ${opened} of ${prs.length} PRs in "${phaseTitle}" — your browser blocked the rest as pop-ups. ` +
+            `Allow pop-ups for this site, then click "Open all in ADO" again.`
+    );
   }
 
   protected async completeAllPrs(phaseKey: PhaseBucketKey): Promise<void> {

@@ -162,7 +162,12 @@
                     {{ checkingStatusPhase() === bucket.key ? 'Checking…' : 'Check status' }}
                   </button>
                   <button type="button" class="btn btn-sm btn-ghost" (click)="copyPrLinks(bucket.key)">Copy links</button>
-                  <button type="button" class="btn btn-sm btn-ghost" (click)="openAllPrs(bucket.key)">Open all in ADO</button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-ghost"
+                    (click)="openAllPrs(bucket.key)"
+                    title="Browsers usually only allow the first tab and silently block the rest. If some don't open, allow pop-ups for this site and try again."
+                  >Open all in ADO</button>
                   <button
                     type="button"
                     class="btn btn-sm btn-danger-ghost"
