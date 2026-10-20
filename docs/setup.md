@@ -51,6 +51,16 @@ Code **Read** alone is not enough for opening or completing pull requests.
 
 Set the PAT expiry date when saving credentials. The app raises **in-app** notifications when a PAT is expired or within 14 days (toggle under **Account settings**). There is no email digest.
 
+## Chat notifications (Teams, Slack, Discord)
+
+Azure Admin can POST one summary message for **dev → master created**, **dev → master merged**, **master → prod created**, and **master → prod merged**. Chat apps never talk to Azure DevOps; you do not register ADO service hooks.
+
+1. Create an incoming webhook in the destination (Teams: channel **… → Workflows → “Send webhook alerts to a channel”**; Slack: Incoming Webhooks; Discord: Channel → Integrations → Webhooks). Azure Admin POSTs the same kind of JSON Discord uses: `{ "text": "…" }` for Teams/Slack, `{ "content": "…" }` for Discord.
+2. Under **Settings → Chat notifications**, add the destination, paste the URL, and toggle the events you want.
+3. The built-in template is shown on that page. Optionally customize it with placeholders such as `{{pr_count}}`, `{{phase}}`, `{{team_count}}`, and `{{pr_list}}` (`- name - team`).
+
+The webhook URL is encrypted at rest and only a masked preview is shown after save. Delivery failures are recorded on the destination and never fail PR creation.
+
 ## First-run checklist
 
 1. Sign in via Keycloak.

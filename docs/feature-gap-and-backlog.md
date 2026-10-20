@@ -2,7 +2,7 @@
 
 Setup, Keycloak, ADO PAT scopes, and the release workflow: [setup.md](setup.md). Product overview: [README](../README.md).
 
-Notifications are **in-app only** (no email).
+In-app notifications cover PAT expiry, PR merged (on status sync), and batch failures. **Teams / Slack / Discord** outgoing webhooks can post one summary per PR batch (Settings → Chat notifications). There is no email digest.
 
 ---
 
@@ -38,7 +38,7 @@ Notifications are **in-app only** (no email).
 | More Jira patterns | Smart commits, keys in branch names |
 | Azure Boards (`AB#123`) | Same idea as Jira links |
 | Confluence / wiki export | Publish notes to a page template |
-| Slack / Teams | Post on batch create or phase complete |
+| Slack / Teams / Discord | Done: Settings → Chat notifications (per-phase created/merged toggles, templates) |
 | Changelog formats | JSON, HTML, PDF, Keep a Changelog |
 | Commit filters | Exclude bots/merges/paths; include only `feat`/`fix` |
 | Semantic version suggestion | Infer from conventional commits |

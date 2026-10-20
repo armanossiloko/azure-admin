@@ -547,6 +547,74 @@ namespace AzureAdmin.API.Migrations
                     b.ToTable("UserPreferences");
                 });
 
+            modelBuilder.Entity("AzureAdmin.API.Models.WebhookSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset?>("LastDeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastDeliveryError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("NotifyOnDevToMasterCreated")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyOnDevToMasterMerged")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyOnMasterToProdCreated")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyOnMasterToProdMerged")
+                        .HasColumnType("boolean");
+
+                    b.Property<byte[]>("ProtectedUrl")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("TemplateCreated")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("TemplateMerged")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UrlPreview")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Enabled");
+
+                    b.ToTable("WebhookSubscriptions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")

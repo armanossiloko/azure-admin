@@ -34,6 +34,7 @@ type ReleaseSummary = {
 type BatchCreateResponse = {
   results: { repositoryIdOrName: string; pullRequestId: number; url: string; note?: string | null }[];
   skippedDecommissionedRepositories?: string[];
+  teamErrors?: string[];
 };
 
 type BatchPreflightRepoResult = {
@@ -426,25 +427,28 @@ export class ReleaseCreatePage implements OnInit {
         return;
       }
 
+      const teams: { teamId: string; registeredRepositoryIds: string[] }[] = [];
       for (const tid of included) {
         const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id => {
           const repo = this.reposForTeam(tid).find(r => r.id === id);
           return !repo?.isDecommissioned;
         });
         if (!ids.length) continue;
-        try {
-          const resp = await firstValueFrom(
-            this.http.post<BatchCreateResponse>(
-              `/api/releases/${releaseId}/teams/${tid}/pull-requests/batch`,
-              { ...batchBase, registeredRepositoryIds: ids }
-            )
-          );
-          aggregated.push(...(resp?.results ?? []));
-          skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
-        } catch (e: unknown) {
-          const teamName = this.teams().find(t => t.id === tid)?.name ?? tid;
-          teamErrors.push(`${teamName}: ${this.prettyError(e)}`);
-        }
+        teams.push({ teamId: tid, registeredRepositoryIds: ids });
+      }
+
+      try {
+        const resp = await firstValueFrom(
+          this.http.post<BatchCreateResponse>(
+            `/api/releases/${releaseId}/pull-requests/batch`,
+            { ...batchBase, teams }
+          )
+        );
+        aggregated.push(...(resp?.results ?? []));
+        skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
+        teamErrors.push(...(resp?.teamErrors ?? []));
+      } catch (e: unknown) {
+        teamErrors.push(this.prettyError(e));
       }
 
       this.created.set({ results: aggregated });

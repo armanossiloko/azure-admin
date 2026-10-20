@@ -1,3 +1,4 @@
+using System.Net.Http;
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Branding;
@@ -6,6 +7,7 @@ using AzureAdmin.API.Services.Health;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
+using AzureAdmin.API.Services.Webhooks;
 
 namespace AzureAdmin.API.DependencyInjection;
 
@@ -34,6 +36,17 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();
         services.AddScoped<NotificationService>();
+        services.AddScoped<WebhookSubscriptionService>();
+        services.AddScoped<OutboundWebhookPublisher>();
+        services.AddHttpClient(OutboundWebhookPublisher.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("AzureAdmin-Webhooks/1.0");
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseCookies = false
+        });
         services.AddSingleton<ConventionalCommitParser>();
         services.AddSingleton<JiraReferenceExtractor>();
 

@@ -27,6 +27,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();
     public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
+    public DbSet<WebhookSubscription> WebhookSubscriptions => Set<WebhookSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -198,6 +199,18 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WebhookSubscription>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(128).IsRequired();
+            e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(16).IsRequired();
+            e.Property(x => x.UrlPreview).HasMaxLength(512).IsRequired();
+            e.Property(x => x.TemplateCreated).HasMaxLength(4000);
+            e.Property(x => x.TemplateMerged).HasMaxLength(4000);
+            e.Property(x => x.LastDeliveryError).HasMaxLength(2000);
+            e.HasIndex(x => x.Enabled);
         });
     }
 }

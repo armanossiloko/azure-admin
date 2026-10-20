@@ -4,8 +4,18 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { BrandingService, DEFAULT_BRANDING } from '../../services/branding.service';
 import { AppSettings, SettingsService } from '../../services/settings.service';
+import {
+  CreateWebhookRequest,
+  WebhookDefaultTemplates,
+  WebhookKind,
+  WebhookPlaceholder,
+  WebhookSubscription,
+  WebhooksService
+} from '../../services/webhooks.service';
 
 export type GroupConfig = { name: string; alwaysIncluded: boolean };
+
+type WebhookDraft = CreateWebhookRequest & { customizeTemplates: boolean };
 
 @Component({
   standalone: true,
@@ -15,6 +25,7 @@ export type GroupConfig = { name: string; alwaysIncluded: boolean };
 })
 export class SettingsPage implements OnInit {
   private readonly brandingService = inject(BrandingService);
+  private readonly webhooksService = inject(WebhooksService);
 
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
@@ -58,14 +69,31 @@ export class SettingsPage implements OnInit {
 
   protected jiraProjectKeyDraft = '';
 
+  protected readonly webhookKinds: WebhookKind[] = ['Teams', 'Slack', 'Discord'];
+  protected readonly webhooks = signal<WebhookSubscription[]>([]);
+  protected readonly webhookDefaults = signal<WebhookDefaultTemplates | null>(null);
+  protected readonly webhookPlaceholders = signal<WebhookPlaceholder[]>([]);
+  protected readonly webhookBusyId = signal<string | null>(null);
+  protected readonly webhookError = signal<string | null>(null);
+  protected readonly webhookNotice = signal<string | null>(null);
+  protected readonly addingWebhook = signal(false);
+  protected readonly editingWebhookId = signal<string | null>(null);
+  protected webhookDraft: WebhookDraft = this.blankWebhookDraft();
+  protected webhookUrlDraft = '';
+  protected webhookEditUrl = '';
+
   constructor(private readonly settingsService: SettingsService) {}
 
   async ngOnInit(): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const settings = await firstValueFrom(this.settingsService.getSettings());
+      const [settings, hooks] = await Promise.all([
+        firstValueFrom(this.settingsService.getSettings()),
+        firstValueFrom(this.webhooksService.getSettings())
+      ]);
       this.applyLoaded(settings);
+      this.applyWebhooks(hooks);
     } catch {
       this.error.set('Failed to load settings.');
     } finally {
@@ -160,5 +188,237 @@ export class SettingsPage implements OnInit {
     this.brandingName = settings.brandingApplicationName ?? '';
     this.brandingTagline = settings.brandingTagline ?? '';
     this.brandingDescription = settings.brandingDescription ?? '';
+  }
+
+  protected startAddWebhook(): void {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.editingWebhookId.set(null);
+    this.addingWebhook.set(true);
+    this.webhookDraft = this.blankWebhookDraft();
+    this.webhookUrlDraft = '';
+  }
+
+  protected cancelWebhookForm(): void {
+    this.addingWebhook.set(false);
+    this.editingWebhookId.set(null);
+    this.webhookDraft = this.blankWebhookDraft();
+    this.webhookUrlDraft = '';
+    this.webhookEditUrl = '';
+  }
+
+  protected startEditWebhook(hook: WebhookSubscription): void {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.addingWebhook.set(false);
+    this.editingWebhookId.set(hook.id);
+    this.webhookDraft = {
+      name: hook.name,
+      kind: hook.kind,
+      url: '',
+      enabled: hook.enabled,
+      notifyOnDevToMasterCreated: hook.notifyOnDevToMasterCreated,
+      notifyOnDevToMasterMerged: hook.notifyOnDevToMasterMerged,
+      notifyOnMasterToProdCreated: hook.notifyOnMasterToProdCreated,
+      notifyOnMasterToProdMerged: hook.notifyOnMasterToProdMerged,
+      templateCreated: hook.templateCreated,
+      templateMerged: hook.templateMerged,
+      customizeTemplates: !!(hook.templateCreated || hook.templateMerged)
+    };
+    this.webhookEditUrl = '';
+  }
+
+  protected templateFor(kind: 'created' | 'merged'): string {
+    const stored = kind === 'created' ? this.webhookDraft.templateCreated : this.webhookDraft.templateMerged;
+    const defaults = this.webhookDefaults();
+    return stored?.trim() || defaults?.[kind] || '';
+  }
+
+  protected setTemplate(kind: 'created' | 'merged', value: string): void {
+    if (kind === 'created') this.webhookDraft.templateCreated = value;
+    else this.webhookDraft.templateMerged = value;
+  }
+
+  protected resetTemplatesToDefault(): void {
+    this.webhookDraft.templateCreated = null;
+    this.webhookDraft.templateMerged = null;
+  }
+
+  protected onCustomizeTemplates(on: boolean): void {
+    this.webhookDraft.customizeTemplates = on;
+    if (!on) {
+      this.resetTemplatesToDefault();
+      return;
+    }
+    const defaults = this.webhookDefaults();
+    this.webhookDraft.templateCreated ||= defaults?.created ?? null;
+    this.webhookDraft.templateMerged ||= defaults?.merged ?? null;
+  }
+
+  protected enabledEventLabels(hook: WebhookSubscription): string[] {
+    const labels: string[] = [];
+    if (hook.notifyOnDevToMasterCreated) labels.push('dev → master created');
+    if (hook.notifyOnDevToMasterMerged) labels.push('dev → master merged');
+    if (hook.notifyOnMasterToProdCreated) labels.push('master → prod created');
+    if (hook.notifyOnMasterToProdMerged) labels.push('master → prod merged');
+    return labels;
+  }
+
+  protected async saveNewWebhook(): Promise<void> {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.webhookBusyId.set('new');
+    try {
+      const created = await firstValueFrom(
+        this.webhooksService.create({
+          ...this.payloadFromDraft(this.webhookUrlDraft.trim())
+        })
+      );
+      this.webhooks.set([...this.webhooks(), created].sort((a, b) => a.name.localeCompare(b.name)));
+      this.cancelWebhookForm();
+      this.webhookNotice.set(`Added ${created.name}.`);
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Could not add destination.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  protected async saveWebhook(hook: WebhookSubscription): Promise<void> {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.webhookBusyId.set(hook.id);
+    try {
+      const payload = this.payloadFromDraft(this.webhookEditUrl.trim() || null);
+      const updated = await firstValueFrom(this.webhooksService.update(hook.id, payload));
+      this.replaceWebhook(updated);
+      this.cancelWebhookForm();
+      this.webhookNotice.set(`Saved ${updated.name}.`);
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Could not save destination.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  protected async toggleWebhookEnabled(hook: WebhookSubscription, enabled: boolean): Promise<void> {
+    this.webhookError.set(null);
+    this.webhookBusyId.set(hook.id);
+    try {
+      const updated = await firstValueFrom(
+        this.webhooksService.update(hook.id, {
+          name: hook.name,
+          url: null,
+          enabled,
+          notifyOnDevToMasterCreated: hook.notifyOnDevToMasterCreated,
+          notifyOnDevToMasterMerged: hook.notifyOnDevToMasterMerged,
+          notifyOnMasterToProdCreated: hook.notifyOnMasterToProdCreated,
+          notifyOnMasterToProdMerged: hook.notifyOnMasterToProdMerged,
+          templateCreated: hook.templateCreated,
+          templateMerged: hook.templateMerged
+        })
+      );
+      this.replaceWebhook(updated);
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Could not update destination.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  protected async testWebhook(hook: WebhookSubscription): Promise<void> {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.webhookBusyId.set(hook.id);
+    try {
+      const result = await firstValueFrom(this.webhooksService.test(hook.id));
+      if (result.ok) this.webhookNotice.set(`Test message sent to ${hook.name}.`);
+      else this.webhookError.set(result.error || 'Test delivery failed.');
+      await this.reloadWebhooks();
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Test delivery failed.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  protected async deleteWebhook(hook: WebhookSubscription): Promise<void> {
+    if (!confirm(`Remove chat destination “${hook.name}”?`)) return;
+    this.webhookError.set(null);
+    this.webhookBusyId.set(hook.id);
+    try {
+      await firstValueFrom(this.webhooksService.delete(hook.id));
+      this.webhooks.set(this.webhooks().filter((h) => h.id !== hook.id));
+      if (this.editingWebhookId() === hook.id) this.cancelWebhookForm();
+      this.webhookNotice.set(`Removed ${hook.name}.`);
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Could not remove destination.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  protected kindHint(kind: WebhookKind): string {
+    switch (kind) {
+      case 'Teams':
+        return 'Paste a Teams Workflows webhook URL (channel … → Workflows → “Send webhook alerts to a channel”).';
+      case 'Slack':
+        return 'Paste a Slack incoming webhook URL from hooks.slack.com.';
+      case 'Discord':
+        return 'Paste a Discord channel webhook URL (Channel → Integrations → Webhooks).';
+    }
+  }
+
+  private payloadFromDraft(url: string | null): CreateWebhookRequest {
+    const customize = this.webhookDraft.customizeTemplates;
+    return {
+      name: this.webhookDraft.name.trim(),
+      kind: this.webhookDraft.kind,
+      url: url ?? '',
+      enabled: this.webhookDraft.enabled,
+      notifyOnDevToMasterCreated: this.webhookDraft.notifyOnDevToMasterCreated,
+      notifyOnDevToMasterMerged: this.webhookDraft.notifyOnDevToMasterMerged,
+      notifyOnMasterToProdCreated: this.webhookDraft.notifyOnMasterToProdCreated,
+      notifyOnMasterToProdMerged: this.webhookDraft.notifyOnMasterToProdMerged,
+      templateCreated: customize ? this.webhookDraft.templateCreated : null,
+      templateMerged: customize ? this.webhookDraft.templateMerged : null
+    };
+  }
+
+  private replaceWebhook(updated: WebhookSubscription): void {
+    this.webhooks.set(
+      this.webhooks()
+        .map((h) => (h.id === updated.id ? updated : h))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    );
+  }
+
+  private async reloadWebhooks(): Promise<void> {
+    const hooks = await firstValueFrom(this.webhooksService.getSettings());
+    this.applyWebhooks(hooks);
+  }
+
+  private applyWebhooks(hooks: {
+    destinations: WebhookSubscription[];
+    defaults: WebhookDefaultTemplates;
+    placeholders: WebhookPlaceholder[];
+  }): void {
+    this.webhooks.set(hooks.destinations ?? []);
+    this.webhookDefaults.set(hooks.defaults);
+    this.webhookPlaceholders.set(hooks.placeholders ?? []);
+  }
+
+  private blankWebhookDraft(): WebhookDraft {
+    return { ...this.webhooksService.emptyDraft(), customizeTemplates: false };
+  }
+
+  private prettyWebhookError(e: unknown, fallback: string): string {
+    const http = e as { error?: unknown };
+    const body = http?.error;
+    if (typeof body === 'object' && body !== null && 'message' in body) {
+      const message = String((body as { message: unknown }).message ?? '').trim();
+      if (message) return message;
+    }
+    return fallback;
   }
 }

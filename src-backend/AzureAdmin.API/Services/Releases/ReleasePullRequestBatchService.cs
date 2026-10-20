@@ -5,6 +5,7 @@ using AzureAdmin.API.Models;
 using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Notifications;
+using AzureAdmin.API.Services.Webhooks;
 using Microsoft.EntityFrameworkCore;
 
 namespace AzureAdmin.API.Services.Releases;
@@ -16,19 +17,22 @@ public sealed class ReleasePullRequestBatchService
     private readonly ICurrentUser _currentUser;
     private readonly ReleaseCommitNotesService _commitNotes;
     private readonly NotificationService _notifications;
+    private readonly OutboundWebhookPublisher _webhooks;
 
     public ReleasePullRequestBatchService(
         ApplicationDbContext db,
         AzureDevOpsClient ado,
         ICurrentUser currentUser,
         ReleaseCommitNotesService commitNotes,
-        NotificationService notifications)
+        NotificationService notifications,
+        OutboundWebhookPublisher webhooks)
     {
         _db = db;
         _ado = ado;
         _currentUser = currentUser;
         _commitNotes = commitNotes;
         _notifications = notifications;
+        _webhooks = webhooks;
     }
 
     public async Task<BatchPreflightResponse> PreflightPullRequestsForReleaseAsync(
@@ -340,6 +344,60 @@ public sealed class ReleasePullRequestBatchService
         return new BatchCreateReleasePullRequestsResponse(created, skippedDecommissioned);
     }
 
+    public async Task<MultiTeamBatchCreateReleasePullRequestsResponse> CreatePullRequestsForMultipleTeamsAsync(
+        Guid releaseId,
+        MultiTeamBatchCreateReleasePullRequestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Teams is null || request.Teams.Count == 0)
+            throw new InvalidOperationException("Select at least one team.");
+
+        var created = new List<CreatedPullRequestResult>();
+        var skipped = new List<string>();
+        var teamErrors = new List<string>();
+
+        foreach (var teamBatch in request.Teams)
+        {
+            if (teamBatch.RegisteredRepositoryIds is null || teamBatch.RegisteredRepositoryIds.Count == 0)
+                continue;
+
+            var teamName = await _db.Teams.AsNoTracking()
+                .Where(t => t.Id == teamBatch.TeamId)
+                .Select(t => t.Name)
+                .FirstOrDefaultAsync(cancellationToken) ?? teamBatch.TeamId.ToString();
+
+            var single = new BatchCreateReleasePullRequestsRequest(
+                request.Phase,
+                request.Title,
+                request.Description,
+                request.SourceBranch,
+                request.TargetBranch,
+                teamBatch.RegisteredRepositoryIds);
+
+            try
+            {
+                var result = await CreatePullRequestsForReleaseAsync(
+                    releaseId, teamBatch.TeamId, single, cancellationToken);
+                created.AddRange(result.Results);
+                skipped.AddRange(result.SkippedDecommissionedRepositories);
+            }
+            catch (InvalidOperationException ex)
+            {
+                teamErrors.Add($"{teamName}: {ex.Message}");
+            }
+            catch (HttpRequestException ex)
+            {
+                teamErrors.Add($"{teamName}: {ex.Message}");
+            }
+        }
+
+        var createdIds = created.Where(r => r.Id is { } id && id != Guid.Empty).Select(r => r.Id!.Value).ToList();
+        if (createdIds.Count > 0)
+            await _webhooks.NotifyPrBatchCreatedAsync(releaseId, request.Phase, createdIds, cancellationToken);
+
+        return new MultiTeamBatchCreateReleasePullRequestsResponse(created, skipped, teamErrors);
+    }
+
     private async Task<(List<RegisteredRepository> Active, List<string> SkippedDecommissioned)> LoadAndValidateReposAsync(
         Guid teamId,
         BatchCreateReleasePullRequestsRequest request,
@@ -516,9 +574,10 @@ public sealed class ReleasePullRequestBatchService
             description: description,
             ct: cancellationToken);
 
+        var id = Guid.NewGuid();
         _db.ReleasePullRequests.Add(new ReleasePullRequest
         {
-            Id = Guid.NewGuid(),
+            Id = id,
             ReleaseId = releaseId,
             TeamId = teamId,
             RegisteredRepositoryId = repo.Id,
@@ -546,7 +605,7 @@ public sealed class ReleasePullRequestBatchService
             created.PullRequestId,
             cancellationToken);
 
-        return new CreatedPullRequestResult(repo.RepositoryIdOrName, created.PullRequestId, created.Url, note);
+        return new CreatedPullRequestResult(repo.RepositoryIdOrName, created.PullRequestId, created.Url, note, id);
     }
 
     private sealed record BranchDrift(bool ProdAhead, bool MasterAhead, string? Error);
@@ -620,10 +679,13 @@ public sealed class ReleasePullRequestBatchService
         var prs = await _db.ReleasePullRequests
             .Where(pr => pr.ReleaseId == releaseId && pr.Phase == phase)
             .Include(pr => pr.RegisteredRepository)
+            .Include(pr => pr.Team)
             .OrderBy(pr => pr.RegisteredRepository.RepositoryIdOrName)
             .ToListAsync(cancellationToken);
 
         var results = new List<CompletedPullRequestResult>();
+        var completedIds = new List<Guid>();
+        var failedLines = new List<WebhookPrLine>();
         foreach (var pr in prs)
         {
             var repo = pr.RegisteredRepository;
@@ -639,9 +701,10 @@ public sealed class ReleasePullRequestBatchService
 
                 if (snapshot is null)
                 {
+                    const string missing = "Pull request no longer exists in Azure DevOps.";
                     results.Add(new CompletedPullRequestResult(
-                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
-                        "Pull request no longer exists in Azure DevOps."));
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false, missing));
+                    failedLines.Add(ToWebhookLine(pr, missing));
                     continue;
                 }
 
@@ -659,9 +722,10 @@ public sealed class ReleasePullRequestBatchService
                 if (string.IsNullOrEmpty(snapshot.LastMergeSourceCommitId))
                 {
                     await _db.SaveChangesAsync(cancellationToken);
+                    const string noCommit = "Could not determine the merge source commit.";
                     results.Add(new CompletedPullRequestResult(
-                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false,
-                        "Could not determine the merge source commit."));
+                        repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false, noCommit));
+                    failedLines.Add(ToWebhookLine(pr, noCommit));
                     continue;
                 }
 
@@ -677,6 +741,7 @@ public sealed class ReleasePullRequestBatchService
                 pr.Status = ReleasePullRequestStatus.Completed;
                 await _db.SaveChangesAsync(cancellationToken);
                 await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
+                completedIds.Add(pr.Id);
 
                 results.Add(new CompletedPullRequestResult(
                     repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, true, null));
@@ -685,10 +750,13 @@ public sealed class ReleasePullRequestBatchService
             {
                 results.Add(new CompletedPullRequestResult(
                     repo.RepositoryIdOrName, pr.AzureDevOpsPullRequestId, false, ex.Message));
+                failedLines.Add(ToWebhookLine(pr, ex.Message));
             }
         }
 
         await NotifyBatchFailuresAsync(releaseId, releaseTitle, phase, results, cancellationToken);
+        if (completedIds.Count > 0 || failedLines.Count > 0)
+            await _webhooks.NotifyPrMergedAsync(releaseId, phase, completedIds, failedLines, cancellationToken);
         await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
         return results;
     }
@@ -716,6 +784,7 @@ public sealed class ReleasePullRequestBatchService
         var prs = await query.Include(pr => pr.RegisteredRepository).ToListAsync(cancellationToken);
 
         var results = new List<ReleasePullRequestStatusResult>();
+        var newlyCompleted = new List<ReleasePullRequest>();
         foreach (var pr in prs)
         {
             var repo = pr.RegisteredRepository;
@@ -737,6 +806,7 @@ public sealed class ReleasePullRequestBatchService
                     pr.Status == ReleasePullRequestStatus.Completed)
                 {
                     await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
+                    newlyCompleted.Add(pr);
                 }
             }
             catch (HttpRequestException)
@@ -747,8 +817,43 @@ public sealed class ReleasePullRequestBatchService
             results.Add(new ReleasePullRequestStatusResult(pr.Id, pr.Status));
         }
 
+        await NotifyPhaseCompleteWebhooksAsync(releaseId, prs, newlyCompleted, cancellationToken);
         await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
         return results;
+    }
+
+    private async Task NotifyPhaseCompleteWebhooksAsync(
+        Guid releaseId,
+        IReadOnlyList<ReleasePullRequest> scanned,
+        IReadOnlyList<ReleasePullRequest> newlyCompleted,
+        CancellationToken cancellationToken)
+    {
+        if (newlyCompleted.Count == 0)
+            return;
+
+        foreach (var phaseGroup in newlyCompleted.GroupBy(pr => pr.Phase))
+        {
+            var phasePrs = scanned.Where(pr => pr.Phase == phaseGroup.Key).ToList();
+            if (phasePrs.Count == 0)
+                continue;
+            if (phasePrs.Any(pr => pr.Status != ReleasePullRequestStatus.Completed))
+                continue;
+
+            await _webhooks.NotifyPrMergedAsync(
+                releaseId,
+                phaseGroup.Key,
+                phasePrs.Select(pr => pr.Id).ToList(),
+                failed: [],
+                cancellationToken);
+        }
+    }
+
+    private static WebhookPrLine ToWebhookLine(ReleasePullRequest pr, string? failure)
+    {
+        var name = string.IsNullOrWhiteSpace(pr.RegisteredRepository.ServiceName)
+            ? pr.RegisteredRepository.RepositoryIdOrName
+            : pr.RegisteredRepository.ServiceName;
+        return new WebhookPrLine(pr.Team.Name, name, pr.AzureDevOpsPullRequestId, pr.Url, failure);
     }
 
     private async Task NotifyPrMergedAsync(

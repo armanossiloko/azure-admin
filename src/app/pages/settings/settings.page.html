@@ -208,7 +208,7 @@
   </div>
 
   <!-- Jira Integration -->
-  <div class="card">
+  <div class="card" style="margin-bottom: var(--s-5)">
     <div class="card-header">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
@@ -299,4 +299,222 @@
 
     </div>
   </div>
+
+  <!-- Chat notifications -->
+  <div class="card">
+    <div class="card-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <div style="flex: 1">
+        <h3 class="card-title">Chat notifications</h3>
+        <p class="card-subtitle">Post one summary to Teams, Slack, or Discord when Azure Admin opens or merges a PR batch. No Azure DevOps service hooks.</p>
+      </div>
+      <button type="button" class="btn btn-sm" (click)="startAddWebhook()" [disabled]="addingWebhook()">
+        Add destination
+      </button>
+    </div>
+    <div class="card-body" style="display: flex; flex-direction: column; gap: var(--s-4)">
+      @if (webhookError()) {
+        <div class="banner danger">
+          <div class="banner-body">{{ webhookError() }}</div>
+        </div>
+      }
+      @if (webhookNotice()) {
+        <div class="banner info">
+          <div class="banner-body">{{ webhookNotice() }}</div>
+        </div>
+      }
+
+      @if (webhookDefaults(); as defaults) {
+        <div style="padding: var(--s-4); border: 1px dashed var(--border); border-radius: var(--r-3); background: var(--bg-3)">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: var(--s-2)">Built-in template</div>
+          <pre style="margin: 0 0 var(--s-3); font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: var(--text-2)">{{ defaults.created }}</pre>
+          <div style="font-size: 12px; font-weight: 500; margin-bottom: var(--s-1)">Example</div>
+          <pre style="margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap">{{ defaults.samplePreview }}</pre>
+        </div>
+      }
+
+      @if (addingWebhook()) {
+        <div style="padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-3); background: var(--bg-3); display: flex; flex-direction: column; gap: var(--s-3)">
+          <div style="font-size: 13px; font-weight: 600">New destination</div>
+          <ng-container *ngTemplateOutlet="webhookForm; context: { isNew: true }"></ng-container>
+          <div style="display: flex; gap: var(--s-2); justify-content: flex-end">
+            <button type="button" class="btn btn-ghost btn-sm" (click)="cancelWebhookForm()">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              (click)="saveNewWebhook()"
+              [disabled]="webhookBusyId() === 'new' || !webhookDraft.name.trim() || !webhookUrlDraft.trim()"
+            >
+              {{ webhookBusyId() === 'new' ? 'Saving…' : 'Add' }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (!webhooks().length && !addingWebhook()) {
+        <div class="muted" style="font-size: 13px">
+          No destinations yet. Create an incoming webhook in Teams, Slack, or Discord and paste the URL here.
+        </div>
+      }
+
+      @for (hook of webhooks(); track hook.id) {
+        <div style="padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-3); display: flex; flex-direction: column; gap: var(--s-3)">
+          <div style="display: flex; gap: var(--s-3); align-items: flex-start; flex-wrap: wrap">
+            <div style="flex: 1; min-width: 180px">
+              <div style="display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap">
+                <div style="font-size: 14px; font-weight: 600">{{ hook.name }}</div>
+                <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); background: var(--bg-3); padding: 2px 7px; border-radius: var(--r-2)">{{ hook.kind }}</span>
+                @if (!hook.enabled) {
+                  <span class="muted" style="font-size: 11px">paused</span>
+                }
+              </div>
+              <div class="muted" style="font-size: 12px; margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">{{ hook.urlPreview }}</div>
+              @if (enabledEventLabels(hook).length) {
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px">
+                  @for (label of enabledEventLabels(hook); track label) {
+                    <span style="font-size: 11px; font-weight: 500; color: var(--text-2); background: var(--bg-3); padding: 2px 7px; border-radius: var(--r-2)">{{ label }}</span>
+                  }
+                </div>
+              } @else {
+                <div class="muted" style="font-size: 12px; margin-top: 6px">No events selected</div>
+              }
+              @if (hook.lastDeliveryError) {
+                <div style="font-size: 12px; color: var(--danger-text); margin-top: 4px">Last delivery: {{ hook.lastDeliveryError }}</div>
+              } @else if (hook.lastDeliveredAt) {
+                <div class="muted" style="font-size: 12px; margin-top: 4px">Last delivery {{ hook.lastDeliveredAt | date:'medium' }}</div>
+              }
+            </div>
+            <div style="display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap">
+              <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: center">
+                <input
+                  type="checkbox"
+                  [checked]="hook.enabled"
+                  [disabled]="webhookBusyId() === hook.id"
+                  (change)="toggleWebhookEnabled(hook, $any($event.target).checked)"
+                >
+                <span style="font-size: 12.5px">Enabled</span>
+              </label>
+              <button type="button" class="btn btn-sm" (click)="testWebhook(hook)" [disabled]="webhookBusyId() === hook.id || !hook.enabled">
+                Send test
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="startEditWebhook(hook)" [disabled]="webhookBusyId() === hook.id">
+                Edit
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="deleteWebhook(hook)" [disabled]="webhookBusyId() === hook.id">
+                Remove
+              </button>
+            </div>
+          </div>
+
+          @if (editingWebhookId() === hook.id) {
+            <div style="padding-top: var(--s-3); border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: var(--s-3)">
+              <ng-container *ngTemplateOutlet="webhookForm; context: { isNew: false }"></ng-container>
+              <div class="field" style="max-width: 520px">
+                <label class="field-label" [attr.for]="'wh-url-' + hook.id">Webhook URL</label>
+                <input
+                  [id]="'wh-url-' + hook.id"
+                  type="url"
+                  class="input"
+                  [(ngModel)]="webhookEditUrl"
+                  placeholder="Leave blank to keep the stored URL"
+                  autocomplete="off"
+                />
+                <div class="field-hint">{{ kindHint(hook.kind) }}</div>
+              </div>
+              <div style="display: flex; gap: var(--s-2); justify-content: flex-end">
+                <button type="button" class="btn btn-ghost btn-sm" (click)="cancelWebhookForm()">Cancel</button>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  (click)="saveWebhook(hook)"
+                  [disabled]="webhookBusyId() === hook.id || !webhookDraft.name.trim()"
+                >
+                  {{ webhookBusyId() === hook.id ? 'Saving…' : 'Save destination' }}
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
 </div>
+
+<ng-template #webhookForm let-isNew="isNew">
+  <div class="field" style="max-width: 360px">
+    <label class="field-label" for="wh-name">Name</label>
+    <input id="wh-name" type="text" class="input" [(ngModel)]="webhookDraft.name" maxlength="128" placeholder="Release channel" />
+  </div>
+  @if (isNew) {
+    <div class="field" style="max-width: 240px">
+      <label class="field-label" for="wh-kind">Destination</label>
+      <select id="wh-kind" class="select" [(ngModel)]="webhookDraft.kind">
+        @for (kind of webhookKinds; track kind) {
+          <option [ngValue]="kind">{{ kind }}</option>
+        }
+      </select>
+    </div>
+    <div class="field" style="max-width: 520px">
+      <label class="field-label" for="wh-url">Webhook URL</label>
+      <input id="wh-url" type="url" class="input" [(ngModel)]="webhookUrlDraft" placeholder="https://…" autocomplete="off" />
+      <div class="field-hint">{{ kindHint(webhookDraft.kind) }} Stored encrypted. Never shown in full after save.</div>
+    </div>
+  }
+  <div>
+    <div style="font-size: 13px; font-weight: 500; margin-bottom: var(--s-2)">Notify when</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-2)">
+      <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: center">
+        <input type="checkbox" [(ngModel)]="webhookDraft.notifyOnDevToMasterCreated">
+        <span style="font-size: 13px">dev → master created</span>
+      </label>
+      <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: center">
+        <input type="checkbox" [(ngModel)]="webhookDraft.notifyOnDevToMasterMerged">
+        <span style="font-size: 13px">dev → master merged</span>
+      </label>
+      <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: center">
+        <input type="checkbox" [(ngModel)]="webhookDraft.notifyOnMasterToProdCreated">
+        <span style="font-size: 13px">master → prod created</span>
+      </label>
+      <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: center">
+        <input type="checkbox" [(ngModel)]="webhookDraft.notifyOnMasterToProdMerged">
+        <span style="font-size: 13px">master → prod merged</span>
+      </label>
+    </div>
+  </div>
+  <label class="row" style="gap: var(--s-2); cursor: pointer; align-items: flex-start">
+    <input
+      type="checkbox"
+      [checked]="webhookDraft.customizeTemplates"
+      (change)="onCustomizeTemplates($any($event.target).checked)"
+      style="margin-top: 3px"
+    >
+    <div>
+      <div style="font-size: 13px; font-weight: 500">Customize message templates</div>
+      <div class="muted" style="font-size: 12px; margin-top: 1px">Use placeholders such as <code style="font-size: 11px">{{ '{{pr_count}}' }}</code>, <code style="font-size: 11px">{{ '{{phase}}' }}</code>, <code style="font-size: 11px">{{ '{{pr_list}}' }}</code>.</div>
+    </div>
+  </label>
+  @if (webhookDraft.customizeTemplates) {
+    <div style="display: flex; flex-direction: column; gap: var(--s-3); padding-left: var(--s-4); border-left: 2px solid var(--border-subtle)">
+      <div class="field">
+        <label class="field-label" for="wh-tpl-created">Created</label>
+        <textarea id="wh-tpl-created" class="textarea" rows="6" [ngModel]="templateFor('created')" (ngModelChange)="setTemplate('created', $event)"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label" for="wh-tpl-merged">Merged</label>
+        <textarea id="wh-tpl-merged" class="textarea" rows="6" [ngModel]="templateFor('merged')" (ngModelChange)="setTemplate('merged', $event)"></textarea>
+      </div>
+      <div class="muted" style="font-size: 12px; line-height: 1.5">
+        Placeholders:
+        @for (p of webhookPlaceholders(); track p.token) {
+          <code style="font-size: 11px; margin-right: 6px" [title]="p.description">{{ p.token }}</code>
+        }
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" style="align-self: flex-start" (click)="resetTemplatesToDefault(); onCustomizeTemplates(true)">
+        Reset templates to default
+      </button>
+    </div>
+  }
+</ng-template>
+

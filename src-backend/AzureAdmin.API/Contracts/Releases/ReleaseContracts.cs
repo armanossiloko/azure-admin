@@ -66,7 +66,23 @@ public sealed record CreatedPullRequestResult(
     int PullRequestId,
     string Url,
     /// <summary>Set when this pull request is a prod → dev back-merge opened instead of the requested promotion.</summary>
-    string? Note = null);
+    string? Note = null,
+    Guid? Id = null);
+
+public sealed record TeamPullRequestBatch(Guid TeamId, IReadOnlyList<Guid> RegisteredRepositoryIds);
+
+public sealed record MultiTeamBatchCreateReleasePullRequestsRequest(
+    ReleasePrPhase Phase,
+    string Title,
+    string? Description,
+    string? SourceBranch,
+    string? TargetBranch,
+    IReadOnlyList<TeamPullRequestBatch> Teams);
+
+public sealed record MultiTeamBatchCreateReleasePullRequestsResponse(
+    IReadOnlyList<CreatedPullRequestResult> Results,
+    IReadOnlyList<string> SkippedDecommissionedRepositories,
+    IReadOnlyList<string> TeamErrors);
 
 public sealed record BatchPreflightResponse(
     bool CanProceed,

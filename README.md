@@ -9,6 +9,7 @@ Admin app for **teams**, **registered Azure DevOps repositories**, **release tra
 - **Registered repositories** — Links an ADO org/project/repo (and optional service alias) to a team for release workflows. A repository can be marked **decommissioned** so later release batches skip it and do not open pull requests for that service.
 - **Releases** — Draft releases with sprint labels; attach teams; batch-create **dev → master** and **master → prod** pull requests via the Azure DevOps REST API; store PR metadata and optional **commit notes** between branch pairs.
 - **Azure DevOps settings** — Per-user organizations (URL slug) and **encrypted PAT** storage (Data Protection + EF), plus a **catalog** API to list projects and Git repos for import flows.
+- **Chat notifications** — Optional Teams, Slack, or Discord incoming webhooks with a built-in template and per-event toggles (dev → master / master → prod, created or merged).
 
 The API calls Azure DevOps with each user’s stored PAT; there is no global ADO service account.
 

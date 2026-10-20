@@ -6,6 +6,7 @@ using AzureAdmin.API.Services.AzureDevOps;
 using AzureAdmin.API.Services.Identity;
 using AzureAdmin.API.Services.Notifications;
 using AzureAdmin.API.Services.Releases;
+using AzureAdmin.API.Services.Webhooks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,7 @@ public sealed class ReleasesController : ControllerBase
     private readonly JiraReferenceExtractor _jiraExtractor;
     private readonly OrganizationScopeService _orgScope;
     private readonly NotificationService _notifications;
+    private readonly OutboundWebhookPublisher _webhooks;
 
     public ReleasesController(
         ApplicationDbContext db,
@@ -34,7 +36,8 @@ public sealed class ReleasesController : ControllerBase
         ConventionalCommitParser commitParser,
         JiraReferenceExtractor jiraExtractor,
         OrganizationScopeService orgScope,
-        NotificationService notifications)
+        NotificationService notifications,
+        OutboundWebhookPublisher webhooks)
     {
         _db = db;
         _batchService = batchService;
@@ -44,6 +47,7 @@ public sealed class ReleasesController : ControllerBase
         _jiraExtractor = jiraExtractor;
         _orgScope = orgScope;
         _notifications = notifications;
+        _webhooks = webhooks;
     }
 
     [HttpGet]
@@ -285,6 +289,39 @@ public sealed class ReleasesController : ControllerBase
                 request,
                 cancellationToken);
 
+            var createdIds = results.Results
+                .Where(r => r.Id is { } id && id != Guid.Empty)
+                .Select(r => r.Id!.Value)
+                .ToList();
+            if (createdIds.Count > 0)
+                await _webhooks.NotifyPrBatchCreatedAsync(releaseId, request.Phase, createdIds, cancellationToken);
+
+            return Ok(results);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await NotifyBatchCreateFailureAsync(releaseId, request.Phase, ex.Message, cancellationToken);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (HttpRequestException ex)
+        {
+            await NotifyBatchCreateFailureAsync(releaseId, request.Phase, ex.Message, cancellationToken);
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{releaseId:guid}/pull-requests/batch")]
+    public async Task<ActionResult<MultiTeamBatchCreateReleasePullRequestsResponse>> BatchCreatePullRequestsForTeams(
+        Guid releaseId,
+        [FromBody] MultiTeamBatchCreateReleasePullRequestsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var results = await _batchService.CreatePullRequestsForMultipleTeamsAsync(
+                releaseId,
+                request,
+                cancellationToken);
             return Ok(results);
         }
         catch (InvalidOperationException ex)
