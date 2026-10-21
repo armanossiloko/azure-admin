@@ -17,9 +17,14 @@ namespace AzureAdmin.API.Migrations
                 type: "uuid",
                 nullable: true);
 
-            // Give existing releases a stamp so concurrency checks also cover them (gen_random_uuid: PostgreSQL 13+).
-            // The creator of existing releases is unknown and stays null.
-            migrationBuilder.Sql("""UPDATE "Releases" SET "ConcurrencyStamp" = gen_random_uuid() WHERE "ConcurrencyStamp" IS NULL;""");
+            // Give existing releases a stamp so concurrency checks also cover them. md5::uuid works on
+            // PostgreSQL 9+ without pgcrypto / gen_random_uuid (13+). The creator of existing releases
+            // is unknown and stays null — later edits must not invent one.
+            migrationBuilder.Sql("""
+                UPDATE "Releases"
+                SET "ConcurrencyStamp" = md5(random()::text || "Id"::text || clock_timestamp()::text)::uuid
+                WHERE "ConcurrencyStamp" IS NULL;
+                """);
 
             migrationBuilder.AddColumn<Guid>(
                 name: "CreatedByUserId",

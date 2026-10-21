@@ -653,8 +653,11 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                 devPr.AzureDevOpsPullRequestId,
                 cancellationToken);
 
-            devPr.Status = ReleasePullRequestStatusMapper.Map(status);
-            await _db.SaveChangesAsync(cancellationToken);
+            if (ReleasePullRequestStatusMapper.CanPersistRemoteStatus(lookupSucceeded: true, status))
+            {
+                devPr.Status = ReleasePullRequestStatusMapper.Map(status);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
         }
         catch (HttpRequestException)
         {
@@ -896,7 +899,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         var newlyCompleted = new List<ReleasePullRequest>();
         foreach (var (pr, _, status, ok) in fetched)
         {
-            if (!ok)
+            if (!ReleasePullRequestStatusMapper.CanPersistRemoteStatus(ok, status))
                 continue;
 
             var previous = pr.Status;

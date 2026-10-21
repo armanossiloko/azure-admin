@@ -21,4 +21,17 @@ public sealed class ReleasePullRequestStatusMapperTests
     {
         Assert.Equal(expected, ReleasePullRequestStatusMapper.Map(adoStatus));
     }
+
+    [Theory]
+    [InlineData(false, "active", false)]
+    [InlineData(true, null, false)]
+    [InlineData(true, "", false)]
+    [InlineData(true, "  ", false)]
+    [InlineData(true, "active", true)]
+    [InlineData(true, "completed", true)]
+    public void A_missing_or_failed_lookup_does_not_replace_the_stored_status(
+        bool lookupSucceeded, string? adoStatus, bool persist)
+    {
+        Assert.Equal(persist, ReleasePullRequestStatusMapper.CanPersistRemoteStatus(lookupSucceeded, adoStatus));
+    }
 }

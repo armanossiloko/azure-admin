@@ -253,6 +253,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
                     entry.Entity.ConcurrencyStamp ??= Guid.NewGuid();
                     break;
                 case EntityState.Modified:
+                    // Do not set CreatedByUserId: releases from before this column existed stay anonymous.
                     entry.Entity.UpdatedAt = now;
                     entry.Entity.ConcurrencyStamp = Guid.NewGuid();
                     break;
