@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.DependencyInjection;
+using AzureAdmin.API.Infrastructure;
 using AzureAdmin.API.Models;
 using AzureAdmin.API.Services.Identity;
 using Microsoft.AspNetCore.Authentication;
@@ -20,6 +21,18 @@ builder.Services.AddControllers()
     {
         o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
+
+// Uncaught exceptions and automatic model-validation failures both become JSON problem details
+// carrying a top-level "message" (the error shape the SPA already reads).
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = ctx =>
+    {
+        if (!ctx.ProblemDetails.Extensions.ContainsKey("message"))
+            ctx.ProblemDetails.Extensions["message"] = ctx.ProblemDetails.Detail ?? ctx.ProblemDetails.Title ?? "Request failed.";
+    };
+});
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services.AddSwaggerGen();
 
@@ -126,6 +139,8 @@ builder.Services.AddHttpClient();
 builder.Services.AddApplicationServices(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 using (var scope = app.Services.CreateScope())
 {
