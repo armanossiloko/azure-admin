@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Security.Claims;
 using System.Text;
+using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -56,20 +57,65 @@ public sealed class OutboundWebhookPublisher
             : NotifyAsync(kind.Value, releaseId, phase, completedPullRequestIds, failed, cancellationToken);
     }
 
-    public async Task<WebhookTestSendResult> SendTestAsync(Guid subscriptionId, CancellationToken cancellationToken)
+    public async Task<WebhookTestSendResult> SendTestAsync(
+        Guid subscriptionId,
+        bool merged,
+        CancellationToken cancellationToken)
     {
         var subscription = await _subscriptions.GetTrackedAsync(subscriptionId, cancellationToken);
         if (subscription is null)
-            return new WebhookTestSendResult(false, "Destination was not found.");
+            return WebhookTestSendResult.DestinationNotFound;
 
-        var sample = WebhookMessageRenderer.SampleContext with
+        return await DeliverAsync(subscription, BuildTestContext(merged), cancellationToken, isTest: true);
+    }
+
+    /// <summary>
+    /// Sends a sample message using unsaved form values so a URL can be verified before it is saved.
+    /// Delivery status is not recorded on any stored destination.
+    /// </summary>
+    public async Task<WebhookTestSendResult> SendDraftTestAsync(
+        TestWebhookDraftRequest request,
+        CancellationToken cancellationToken)
+    {
+        var kind = request.Kind;
+        string url;
+        if (!string.IsNullOrWhiteSpace(request.Url))
         {
-            ReleaseUrl = TryGetReleaseUrl(Guid.Empty)?.Replace(Guid.Empty.ToString(), "example")
-                ?? WebhookMessageRenderer.SampleContext.ReleaseUrl,
-            Actor = TryGetActor() ?? WebhookMessageRenderer.SampleContext.Actor
-        };
+            url = request.Url.Trim();
+        }
+        else if (request.ExistingId is { } existingId)
+        {
+            var existing = await _subscriptions.GetTrackedAsync(existingId, cancellationToken);
+            if (existing is null)
+                return WebhookTestSendResult.DestinationNotFound;
 
-        return await DeliverAsync(subscription, sample, cancellationToken, isTest: true);
+            // The kind of a saved destination cannot change, so its stored URL is only valid for that kind.
+            kind = existing.Kind;
+            try
+            {
+                url = _subscriptions.UnprotectUrl(existing.ProtectedUrl);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new WebhookTestSendResult(false, ex.Message);
+            }
+        }
+        else
+        {
+            return new WebhookTestSendResult(false, "Webhook URL is required.");
+        }
+
+        if (!WebhookUrlRules.TryValidate(kind, url, out var urlError))
+            return new WebhookTestSendResult(false, urlError);
+
+        var stored = request.Merged ? request.TemplateMerged : request.TemplateCreated;
+        if (stored is { Length: > WebhookSubscriptionService.MaxTemplateLength })
+            return new WebhookTestSendResult(
+                false,
+                $"Message template must be at most {WebhookSubscriptionService.MaxTemplateLength} characters.");
+
+        var text = RenderText(stored, BuildTestContext(request.Merged), isTest: true);
+        return await PostAsync(kind, url, text, logId: null, cancellationToken);
     }
 
     private async Task NotifyAsync(
@@ -167,13 +213,21 @@ public sealed class OutboundWebhookPublisher
         var stored = WebhookEvents.IsMerged(context.Event)
             ? subscription.TemplateMerged
             : subscription.TemplateCreated;
-        var template = WebhookMessageRenderer.ResolveTemplate(stored, context.Event);
+        var text = RenderText(stored, context, isTest);
 
-        var text = WebhookMessageRenderer.Render(template, context, markdownLinks: true);
-        if (isTest)
-            text = "Test notification from Azure Admin:\n\n" + text;
+        var result = await PostAsync(subscription.Kind, url, text, subscription.Id, cancellationToken);
+        await _subscriptions.RecordDeliveryAsync(subscription.Id, result.Ok, result.Error, cancellationToken);
+        return result;
+    }
 
-        var (mediaType, body) = WebhookPayloadFactory.Create(subscription.Kind, text);
+    private async Task<WebhookTestSendResult> PostAsync(
+        WebhookDestinationKind kind,
+        string url,
+        string text,
+        Guid? logId,
+        CancellationToken cancellationToken)
+    {
+        var (mediaType, body) = WebhookPayloadFactory.Create(kind, text);
 
         try
         {
@@ -183,23 +237,55 @@ public sealed class OutboundWebhookPublisher
             if (!response.IsSuccessStatusCode)
             {
                 var detail = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
-                await _subscriptions.RecordDeliveryAsync(subscription.Id, false, detail, cancellationToken);
+                var responseText = await TryReadErrorBodyAsync(response, cancellationToken);
+                if (!string.IsNullOrEmpty(responseText))
+                    detail += $": {responseText}";
                 _logger.LogWarning(
                     "Webhook {WebhookId} ({Kind}) returned {Status}.",
-                    subscription.Id, subscription.Kind, (int)response.StatusCode);
+                    logId, kind, (int)response.StatusCode);
                 return new WebhookTestSendResult(false, detail);
             }
 
-            await _subscriptions.RecordDeliveryAsync(subscription.Id, true, null, cancellationToken);
             return new WebhookTestSendResult(true, null);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            await _subscriptions.RecordDeliveryAsync(subscription.Id, false, ex.Message, cancellationToken);
-            _logger.LogWarning(ex, "Webhook {WebhookId} ({Kind}) request failed.", subscription.Id, subscription.Kind);
+            _logger.LogWarning(ex, "Webhook {WebhookId} ({Kind}) request failed.", logId, kind);
             return new WebhookTestSendResult(false, ex.Message);
         }
     }
+
+    private static async Task<string?> TryReadErrorBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        const int maxLength = 300;
+        try
+        {
+            var text = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
+            if (text.Length == 0)
+                return null;
+            return text.Length <= maxLength ? text : text[..maxLength] + "…";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string RenderText(string? storedTemplate, WebhookMessageContext context, bool isTest)
+    {
+        var template = WebhookMessageRenderer.ResolveTemplate(storedTemplate, context.Event);
+        var text = WebhookMessageRenderer.Render(template, context, markdownLinks: true);
+        return isTest ? "Test notification from Azure Admin:\n\n" + text : text;
+    }
+
+    private WebhookMessageContext BuildTestContext(bool merged) =>
+        WebhookMessageRenderer.SampleContext with
+        {
+            Event = merged ? WebhookEventKind.DevToMasterMerged : WebhookEventKind.DevToMasterCreated,
+            ReleaseUrl = TryGetReleaseUrl(Guid.Empty)?.Replace(Guid.Empty.ToString(), "example")
+                ?? WebhookMessageRenderer.SampleContext.ReleaseUrl,
+            Actor = TryGetActor() ?? WebhookMessageRenderer.SampleContext.Actor
+        };
 
     private static WebhookPrLine ToLine(ReleasePullRequest pr)
     {
@@ -244,4 +330,7 @@ public sealed class OutboundWebhookPublisher
     }
 }
 
-public sealed record WebhookTestSendResult(bool Ok, string? Error);
+public sealed record WebhookTestSendResult(bool Ok, string? Error, bool NotFound = false)
+{
+    public static WebhookTestSendResult DestinationNotFound { get; } = new(false, "Destination was not found.", NotFound: true);
+}

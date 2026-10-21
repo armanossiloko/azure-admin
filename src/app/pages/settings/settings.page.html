@@ -339,7 +339,22 @@
         <div style="padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-3); background: var(--bg-3); display: flex; flex-direction: column; gap: var(--s-3)">
           <div style="font-size: 13px; font-weight: 600">New destination</div>
           <ng-container *ngTemplateOutlet="webhookForm; context: { isNew: true }"></ng-container>
-          <div style="display: flex; gap: var(--s-2); justify-content: flex-end">
+          <div style="display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; flex-wrap: wrap">
+            <div style="display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; margin-right: auto">
+              <select class="select" style="width: auto; height: 30px; font-size: 12.5px" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
+                <option [ngValue]="false">Created sample</option>
+                <option [ngValue]="true">Merged sample</option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-sm"
+                (click)="testWebhookDraft(null)"
+                [disabled]="webhookBusyId() === 'new' || !webhookUrlDraft.trim()"
+                title="Send a dummy notification using the values above without saving them"
+              >
+                Send test
+              </button>
+            </div>
             <button type="button" class="btn btn-ghost btn-sm" (click)="cancelWebhookForm()">Cancel</button>
             <button
               type="button"
@@ -396,7 +411,7 @@
                 >
                 <span style="font-size: 12.5px">Enabled</span>
               </label>
-              <button type="button" class="btn btn-sm" (click)="testWebhook(hook)" [disabled]="webhookBusyId() === hook.id || !hook.enabled">
+              <button type="button" class="btn btn-sm" (click)="testWebhook(hook)" [disabled]="webhookBusyId() === hook.id" title="Send a dummy notification using the saved settings">
                 Send test
               </button>
               <button type="button" class="btn btn-ghost btn-sm" (click)="startEditWebhook(hook)" [disabled]="webhookBusyId() === hook.id">
@@ -423,7 +438,22 @@
                 />
                 <div class="field-hint">{{ kindHint(hook.kind) }}</div>
               </div>
-              <div style="display: flex; gap: var(--s-2); justify-content: flex-end">
+              <div style="display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; flex-wrap: wrap">
+                <div style="display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; margin-right: auto">
+                  <select class="select" style="width: auto; height: 30px; font-size: 12.5px" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
+                    <option [ngValue]="false">Created sample</option>
+                    <option [ngValue]="true">Merged sample</option>
+                  </select>
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    (click)="testWebhookDraft(hook)"
+                    [disabled]="webhookBusyId() === hook.id"
+                    title="Send a dummy notification using the values above without saving them"
+                  >
+                    Send test
+                  </button>
+                </div>
                 <button type="button" class="btn btn-ghost btn-sm" (click)="cancelWebhookForm()">Cancel</button>
                 <button
                   type="button"

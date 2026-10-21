@@ -56,3 +56,17 @@ public sealed record UpdateWebhookSubscriptionRequest(
     string? TemplateMerged = null);
 
 public sealed record WebhookTestResultDto(bool Ok, string? Error);
+
+/// <summary>
+/// Sends a sample message using unsaved form values. Nothing is persisted.
+/// </summary>
+/// <param name="Url">When null or blank, the stored URL of <paramref name="ExistingId"/> is used.</param>
+/// <param name="ExistingId">Saved destination whose URL (and kind) is used when <paramref name="Url"/> is blank.</param>
+/// <param name="Merged">Send the merged sample instead of the created sample.</param>
+public sealed record TestWebhookDraftRequest(
+    WebhookDestinationKind Kind,
+    string? Url = null,
+    Guid? ExistingId = null,
+    string? TemplateCreated = null,
+    string? TemplateMerged = null,
+    bool Merged = false);

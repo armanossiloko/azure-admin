@@ -58,6 +58,7 @@ Azure Admin can POST one summary message for **dev → master created**, **dev �
 1. Create an incoming webhook in the destination (Teams: channel **… → Workflows → “Send webhook alerts to a channel”**; Slack: Incoming Webhooks; Discord: Channel → Integrations → Webhooks). Azure Admin POSTs the same kind of JSON Discord uses: `{ "text": "…" }` for Teams/Slack, `{ "content": "…" }` for Discord.
 2. Under **Settings → Chat notifications**, add the destination, paste the URL, and toggle the events you want.
 3. The built-in template is shown on that page. Optionally customize it with placeholders such as `{{pr_count}}`, `{{phase}}`, `{{team_count}}`, and `{{pr_list}}` (`- name - team`).
+4. Click **Send test** to post a dummy "created" or "merged" message. In the add/edit form it uses the unsaved URL and templates, so you can check that Teams, Slack, or Discord accepts the URL before saving. On a saved destination it uses the stored settings (paused destinations too). If the chat service rejects the message, its HTTP status and response text are shown.
 
 The webhook URL is encrypted at rest and only a masked preview is shown after save. Delivery failures are recorded on the destination and never fail PR creation.
 

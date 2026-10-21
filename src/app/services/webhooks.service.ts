@@ -53,6 +53,16 @@ export type UpdateWebhookRequest = Omit<CreateWebhookRequest, 'kind' | 'url'> & 
 
 export type WebhookTestResult = { ok: boolean; error: string | null };
 
+/** Sends a sample message from unsaved form values. When `url` is blank, `existingId`'s stored URL is used. */
+export type TestWebhookDraftRequest = {
+  kind: WebhookKind;
+  url: string | null;
+  existingId: string | null;
+  templateCreated: string | null;
+  templateMerged: string | null;
+  merged: boolean;
+};
+
 const emptyDraft = (): CreateWebhookRequest => ({
   name: '',
   kind: 'Teams',
@@ -86,8 +96,12 @@ export class WebhooksService {
     return this.http.delete<void>(`/api/settings/webhooks/${id}`);
   }
 
-  test(id: string): Observable<WebhookTestResult> {
-    return this.http.post<WebhookTestResult>(`/api/settings/webhooks/${id}/test`, {});
+  test(id: string, merged = false): Observable<WebhookTestResult> {
+    return this.http.post<WebhookTestResult>(`/api/settings/webhooks/${id}/test`, {}, { params: { merged } });
+  }
+
+  testDraft(request: TestWebhookDraftRequest): Observable<WebhookTestResult> {
+    return this.http.post<WebhookTestResult>('/api/settings/webhooks/test', request);
   }
 
   emptyDraft(): CreateWebhookRequest {

@@ -67,11 +67,26 @@ public sealed class WebhooksController : ControllerBase
         return ok ? NoContent() : NotFound();
     }
 
-    [HttpPost("{id:guid}/test")]
-    public async Task<ActionResult<WebhookTestResultDto>> Test(Guid id, CancellationToken cancellationToken)
+    [HttpPost("test")]
+    public async Task<ActionResult<WebhookTestResultDto>> TestDraft(
+        [FromBody] TestWebhookDraftRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = await _publisher.SendTestAsync(id, cancellationToken);
-        if (!result.Ok && result.Error == "Destination was not found.")
+        var result = await _publisher.SendDraftTestAsync(request, cancellationToken);
+        if (result.NotFound)
+            return NotFound(new { message = result.Error });
+        return Ok(new WebhookTestResultDto(result.Ok, result.Error));
+    }
+
+    /// <param name="merged">Send the merged sample instead of the created sample.</param>
+    [HttpPost("{id:guid}/test")]
+    public async Task<ActionResult<WebhookTestResultDto>> Test(
+        Guid id,
+        CancellationToken cancellationToken,
+        [FromQuery] bool merged = false)
+    {
+        var result = await _publisher.SendTestAsync(id, merged, cancellationToken);
+        if (result.NotFound)
             return NotFound(new { message = result.Error });
         return Ok(new WebhookTestResultDto(result.Ok, result.Error));
     }

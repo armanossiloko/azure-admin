@@ -81,6 +81,7 @@ export class SettingsPage implements OnInit {
   protected webhookDraft: WebhookDraft = this.blankWebhookDraft();
   protected webhookUrlDraft = '';
   protected webhookEditUrl = '';
+  protected webhookTestMerged = false;
 
   constructor(private readonly settingsService: SettingsService) {}
 
@@ -332,9 +333,37 @@ export class SettingsPage implements OnInit {
     this.webhookBusyId.set(hook.id);
     try {
       const result = await firstValueFrom(this.webhooksService.test(hook.id));
-      if (result.ok) this.webhookNotice.set(`Test message sent to ${hook.name}.`);
+      if (result.ok) this.webhookNotice.set(`Test message sent to ${hook.name}. Check the channel to confirm it arrived.`);
       else this.webhookError.set(result.error || 'Test delivery failed.');
       await this.reloadWebhooks();
+    } catch (e: unknown) {
+      this.webhookError.set(this.prettyWebhookError(e, 'Test delivery failed.'));
+    } finally {
+      this.webhookBusyId.set(null);
+    }
+  }
+
+  /** Sends a sample message using the add/edit form values, without saving them. */
+  protected async testWebhookDraft(existing: WebhookSubscription | null): Promise<void> {
+    this.webhookError.set(null);
+    this.webhookNotice.set(null);
+    this.webhookBusyId.set(existing?.id ?? 'new');
+    const url = (existing ? this.webhookEditUrl : this.webhookUrlDraft).trim();
+    const payload = this.payloadFromDraft(url || null);
+    const name = payload.name || existing?.name || payload.kind;
+    try {
+      const result = await firstValueFrom(
+        this.webhooksService.testDraft({
+          kind: existing?.kind ?? payload.kind,
+          url: url || null,
+          existingId: existing?.id ?? null,
+          templateCreated: payload.templateCreated,
+          templateMerged: payload.templateMerged,
+          merged: this.webhookTestMerged
+        })
+      );
+      if (result.ok) this.webhookNotice.set(`Test message sent to ${name}. Check the channel to confirm it arrived.`);
+      else this.webhookError.set(result.error || 'Test delivery failed.');
     } catch (e: unknown) {
       this.webhookError.set(this.prettyWebhookError(e, 'Test delivery failed.'));
     } finally {
