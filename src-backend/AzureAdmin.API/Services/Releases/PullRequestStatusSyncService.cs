@@ -143,7 +143,7 @@ public sealed class PullRequestStatusSyncService : BackgroundService
         CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
-        var batch = scope.ServiceProvider.GetRequiredService<ReleasePullRequestBatchService>();
+        var batch = scope.ServiceProvider.GetRequiredService<IPullRequestStatusRefresher>();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         var before = await db.ReleasePullRequests.AsNoTracking()

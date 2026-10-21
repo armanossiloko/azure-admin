@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AzureAdmin.API.Services.Releases;
 
-public sealed class ReleasePullRequestBatchService
+public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
 {
     private readonly ApplicationDbContext _db;
     private readonly AzureDevOpsClient _ado;

@@ -43,6 +43,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<StaleBranchService>();
         services.AddScoped<ReleaseCommitNotesService>();
         services.AddScoped<ReleasePullRequestBatchService>();
+        services.AddScoped<IPullRequestStatusRefresher>(sp => sp.GetRequiredService<ReleasePullRequestBatchService>());
         services.AddScoped<NotificationService>();
         services.AddScoped<WebhookSubscriptionService>();
         services.AddScoped<OutboundWebhookPublisher>();
