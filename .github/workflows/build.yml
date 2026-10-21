@@ -23,6 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Before the backend build: building the API regenerates openapi/ and the Angular client,
+      # which needs ng-openapi-gen from node_modules.
+      - run: npm ci
+
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
@@ -30,12 +39,14 @@ jobs:
       - name: Backend tests
         run: dotnet test src-backend/AzureAdmin.API.Tests/AzureAdmin.API.Tests.csproj --configuration Release --logger "trx;LogFileName=backend.trx" --results-directory test-results
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
+      # The committed contract and generated client must match the controllers.
+      - name: API contract and generated client are up to date
+        run: |
+          if ! git diff --quiet -- openapi src/app/api/generated; then
+            echo "::error::openapi/ or src/app/api/generated/ is stale. Build the backend (dotnet build src-backend/AzureAdmin.API) and commit the result."
+            git --no-pager diff --stat -- openapi src/app/api/generated
+            exit 1
+          fi
 
       - name: Frontend tests
         run: npx ng test --watch=false
