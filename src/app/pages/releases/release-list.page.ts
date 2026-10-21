@@ -2,17 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { RELEASE_LIFECYCLE_STATUS, ReleaseLifecycleStatus, ReleasesApi, ReleaseSummaryDto } from '../../api';
 import { SelectedOrgService } from '../../services/selected-org.service';
-
-type ReleaseSummary = {
-  id: string;
-  title: string;
-  sprintLabel: string | null;
-  status: string;
-  createdAt: string;
-};
 
 @Component({
   standalone: true,
@@ -22,13 +13,14 @@ type ReleaseSummary = {
 })
 export class ReleaseListPage {
   private readonly selectedOrg = inject(SelectedOrgService);
+  private readonly releasesApi = inject(ReleasesApi);
 
-  protected readonly rows = signal<ReleaseSummary[]>([]);
+  protected readonly rows = signal<ReleaseSummaryDto[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly loading = signal(false);
   protected readonly statusFilter = signal('');
 
-  constructor(private readonly http: HttpClient) {
+  constructor() {
     effect(() => {
       this.selectedOrg.selectedOrgId();
       this.statusFilter();
@@ -40,21 +32,21 @@ export class ReleaseListPage {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const params: Record<string, string> = {};
-      const orgId = this.selectedOrg.selectedOrgId();
-      if (orgId) params['organizationId'] = orgId;
-      const status = this.statusFilter().trim();
-      if (status) params['status'] = status;
-
-      const list = await firstValueFrom(
-        this.http.get<ReleaseSummary[]>('/api/releases', { params })
-      );
+      const list = await this.releasesApi.releasesList({
+        organizationId: this.selectedOrg.selectedOrgId() ?? undefined,
+        status: this.parseStatus(this.statusFilter())
+      });
       this.rows.set(list ?? []);
     } catch {
       this.error.set('Failed to load releases.');
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private parseStatus(value: string): ReleaseLifecycleStatus | undefined {
+    const wanted = value.trim().toLowerCase();
+    return RELEASE_LIFECYCLE_STATUS.find(s => s.toLowerCase() === wanted);
   }
 
   protected statusBadgeClass(status: string): string {
@@ -78,7 +70,7 @@ export class ReleaseListPage {
   protected async delete(id: string, title: string): Promise<void> {
     if (!confirm(`Delete release "${title}"? This will remove all associated PRs and data.`)) return;
     try {
-      await firstValueFrom(this.http.delete(`/api/releases/${id}`));
+      await this.releasesApi.releasesDelete({ id });
       this.rows.update(rows => rows.filter(r => r.id !== id));
     } catch {
       this.error.set('Failed to delete release.');

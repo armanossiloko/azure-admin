@@ -1,15 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { TeamDto, TeamsApi, UpdateTeamRequest, apiErrorMessage } from '../../api';
 import { SelectedOrgService } from '../../services/selected-org.service';
-
-type Team = {
-  id: string;
-  name: string;
-  parentTeamId: string | null;
-};
 
 @Component({
   standalone: true,
@@ -19,8 +12,9 @@ type Team = {
 })
 export class TeamsPage {
   private readonly selectedOrg = inject(SelectedOrgService);
+  private readonly teamsApi = inject(TeamsApi);
 
-  protected readonly teams = signal<Team[]>([]);
+  protected readonly teams = signal<TeamDto[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -32,7 +26,7 @@ export class TeamsPage {
   protected readonly editName = signal('');
   protected readonly editParentId = signal('');
 
-  constructor(private readonly http: HttpClient) {
+  constructor() {
     effect(() => {
       this.selectedOrg.selectedOrgId();
       void this.refresh();
@@ -42,28 +36,26 @@ export class TeamsPage {
   protected async refresh(): Promise<void> {
     this.error.set(null);
     try {
-      const params: Record<string, string> = {};
-      const orgId = this.selectedOrg.selectedOrgId();
-      if (orgId) params['organizationId'] = orgId;
-
-      const rows = await firstValueFrom(this.http.get<Team[]>('/api/teams', { params }));
+      const rows = await this.teamsApi.teamsList({
+        organizationId: this.selectedOrg.selectedOrgId() ?? undefined
+      });
       this.teams.set(rows ?? []);
     } catch {
       this.error.set('Failed to load teams.');
     }
   }
 
-  protected parentName(parentId: string | null): string {
+  protected parentName(parentId: string | null | undefined): string {
     if (!parentId) return '—';
     const t = this.teams().find(x => x.id === parentId);
     return t?.name ?? parentId;
   }
 
-  protected parentOptions(excludeId?: string | null): Team[] {
+  protected parentOptions(excludeId?: string | null): TeamDto[] {
     return this.teams().filter(t => t.id !== excludeId);
   }
 
-  protected startEdit(team: Team): void {
+  protected startEdit(team: TeamDto): void {
     this.editingId.set(team.id);
     this.editName.set(team.name);
     this.editParentId.set(team.parentTeamId ?? '');
@@ -75,7 +67,7 @@ export class TeamsPage {
     this.editingId.set(null);
   }
 
-  protected async saveEdit(team: Team): Promise<void> {
+  protected async saveEdit(team: TeamDto): Promise<void> {
     const name = this.editName().trim();
     if (!name) {
       this.error.set('Team name is required.');
@@ -90,16 +82,15 @@ export class TeamsPage {
     this.error.set(null);
     this.info.set(null);
     try {
-      const body: Record<string, unknown> = { name };
-      if (clearParent) body['clearParent'] = true;
-      else if (parentChanged && parent) body['parentTeamId'] = parent;
+      const body: UpdateTeamRequest = { name, clearParent };
+      if (!clearParent && parentChanged && parent) body.parentTeamId = parent;
 
-      await firstValueFrom(this.http.patch(`/api/teams/${team.id}`, body));
+      await this.teamsApi.teamsUpdate({ id: team.id, body });
       this.editingId.set(null);
       this.info.set('Team updated.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
@@ -116,46 +107,31 @@ export class TeamsPage {
     this.info.set(null);
     try {
       const pid = this.newParentId().trim();
-      await firstValueFrom(
-        this.http.post('/api/teams', {
-          name,
-          parentTeamId: pid ? pid : null
-        })
-      );
+      await this.teamsApi.teamsCreate({ body: { name, parentTeamId: pid ? pid : null } });
       this.newName.set('');
       this.newParentId.set('');
       this.info.set('Team created.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
   }
 
-  protected async remove(team: Team): Promise<void> {
+  protected async remove(team: TeamDto): Promise<void> {
     if (!confirm(`Delete team “${team.name}”?`)) return;
     this.busy.set(true);
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(this.http.delete(`/api/teams/${team.id}`));
+      await this.teamsApi.teamsDelete({ id: team.id });
       this.info.set('Team removed.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
-  }
-
-  private fmtErr(e: unknown): string {
-    const http = e as { error?: unknown };
-    const body = http?.error;
-    if (typeof body === 'object' && body !== null && 'message' in body) {
-      return String((body as { message: unknown }).message);
-    }
-    if (typeof body === 'string') return body;
-    return 'Request failed.';
   }
 }

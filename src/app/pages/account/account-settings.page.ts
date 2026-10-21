@@ -1,25 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { AccountSettingsApi, NavigationApi, NavigationOrganizationDto } from '../../api';
 import { AuthService } from '../../auth/auth.service';
 import { SelectedOrgService } from '../../services/selected-org.service';
 import { ThemeService, type ThemeId, parseThemeId, THEME_OPTIONS } from '../../theme/theme.service';
-
-type AccountSettings = {
-  userId: string;
-  email: string;
-  displayName: string | null;
-  defaultOrganizationId: string | null;
-  preferredTheme: string | null;
-  notifyPatExpiry: boolean;
-};
-
-type NavOrg = {
-  id: string;
-  displayName: string;
-};
 
 @Component({
   standalone: true,
@@ -28,7 +13,8 @@ type NavOrg = {
   templateUrl: './account-settings.page.html'
 })
 export class AccountSettingsPage implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly accountApi = inject(AccountSettingsApi);
+  private readonly navigationApi = inject(NavigationApi);
   protected readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
   private readonly selectedOrg = inject(SelectedOrgService);
@@ -38,7 +24,7 @@ export class AccountSettingsPage implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
 
-  protected readonly organizations = signal<NavOrg[]>([]);
+  protected readonly organizations = signal<NavigationOrganizationDto[]>([]);
   protected readonly defaultOrganizationId = signal<string>('');
   protected readonly preferredTheme = signal<ThemeId>('dark');
   protected readonly themeOptions = THEME_OPTIONS;
@@ -49,12 +35,12 @@ export class AccountSettingsPage implements OnInit {
     this.error.set(null);
     try {
       const [settings, nav] = await Promise.all([
-        firstValueFrom(this.http.get<AccountSettings>('/api/account/settings')),
-        firstValueFrom(this.http.get<{ organizations: NavOrg[] }>('/api/navigation'))
+        this.accountApi.accountSettingsGetSettings(),
+        this.navigationApi.navigationGet()
       ]);
       this.organizations.set(nav.organizations ?? []);
       this.defaultOrganizationId.set(settings.defaultOrganizationId ?? '');
-      this.preferredTheme.set(parseThemeId(settings.preferredTheme) ?? 'dark');
+      this.preferredTheme.set(parseThemeId(settings.preferredTheme ?? null) ?? 'dark');
       this.notifyPatExpiry.set(settings.notifyPatExpiry);
     } catch {
       this.error.set('Could not load account settings.');
@@ -73,14 +59,14 @@ export class AccountSettingsPage implements OnInit {
     this.info.set(null);
     const orgId = this.defaultOrganizationId().trim();
     try {
-      await firstValueFrom(
-        this.http.patch('/api/account/settings', {
+      await this.accountApi.accountSettingsUpdateSettings({
+        body: {
           updateDefaultOrganization: true,
           defaultOrganizationId: orgId || null,
           preferredTheme: this.preferredTheme(),
           notifyPatExpiry: this.notifyPatExpiry()
-        })
-      );
+        }
+      });
       this.theme.setTheme(this.preferredTheme());
       if (orgId) this.selectedOrg.select(orgId);
       this.info.set('Settings saved.');

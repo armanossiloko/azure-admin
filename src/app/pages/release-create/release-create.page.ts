@@ -1,57 +1,27 @@
 import { CommonModule } from '@angular/common';
-import { SelectedOrgService } from '../../services/selected-org.service';
-import { SettingsService } from '../../services/settings.service';
 import { Component, computed, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
-
-type Team = {
-  id: string;
-  name: string;
-  parentTeamId: string | null;
-};
-
-type RegisteredRepository = {
-  id: string;
-  azureDevOpsOrganization: string;
-  azureDevOpsProject: string;
-  repositoryIdOrName: string;
-  serviceName: string | null;
-  teamId: string;
-  isDecommissioned: boolean;
-};
-
-type ReleaseSummary = {
-  id: string;
-  title: string;
-  sprintLabel: string | null;
-  status: string;
-  createdAt: string;
-};
+import {
+  BatchCreateReleasePullRequestsRequest,
+  CreatedPullRequestResult,
+  RegisteredRepositoriesApi,
+  RegisteredRepositoryDto,
+  ReleasePrPhase,
+  ReleasesApi,
+  TeamDto,
+  TeamPullRequestBatch,
+  TeamsApi,
+  apiErrorMessage
+} from '../../api';
+import { SelectedOrgService } from '../../services/selected-org.service';
+import { SettingsService } from '../../services/settings.service';
 
 type BatchCreateResponse = {
-  results: { repositoryIdOrName: string; pullRequestId: number; url: string; note?: string | null }[];
+  results: CreatedPullRequestResult[];
   skippedDecommissionedRepositories?: string[];
   teamErrors?: string[];
 };
-
-type BatchPreflightRepoResult = {
-  registeredRepositoryId: string;
-  repositoryIdOrName: string;
-  serviceName: string | null;
-  ok: boolean;
-  issues: string[];
-};
-
-type BatchPreflightResponse = {
-  canProceed: boolean;
-  repositories: BatchPreflightRepoResult[];
-  skippedDecommissionedRepositories: string[];
-};
-
-type ReleasePrPhase = 'ProdToDev' | 'DevToMaster' | 'MasterToProd';
 
 type ReleaseForBatchContext = {
   id: string;
@@ -74,9 +44,9 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly toBranch = signal('');
   protected readonly description = signal<string>('');
 
-  protected readonly teams = signal<Team[]>([]);
+  protected readonly teams = signal<TeamDto[]>([]);
   protected readonly includedTeamIds = signal<ReadonlySet<string>>(new Set());
-  protected readonly reposByTeam = signal<Map<string, RegisteredRepository[]>>(new Map());
+  protected readonly reposByTeam = signal<Map<string, RegisteredRepositoryDto[]>>(new Map());
   protected readonly selectedRepoIdsByTeam = signal<Map<string, Set<string>>>(new Map());
 
   protected readonly isSubmitting = signal(false);
@@ -147,19 +117,14 @@ export class ReleaseCreatePage implements OnInit {
     this.toBranch.set('');
   }
 
-  private phaseApiValue(phase: ReleasePrPhase): number {
-    if (phase === 'ProdToDev') return 2;
-    if (phase === 'MasterToProd') return 1;
-    return 0;
-  }
-
   protected readonly selectedOrg = inject(SelectedOrgService);
   private readonly settingsService = inject(SettingsService);
+  private readonly releasesApi = inject(ReleasesApi);
+  private readonly teamsApi = inject(TeamsApi);
+  private readonly repositoriesApi = inject(RegisteredRepositoriesApi);
+  private readonly route = inject(ActivatedRoute);
 
-  constructor(
-    private readonly http: HttpClient,
-    private readonly route: ActivatedRoute
-  ) {
+  constructor() {
     effect(() => {
       this.selectedOrg.selectedOrgId();
       this.reposByTeam.set(new Map());
@@ -179,7 +144,7 @@ export class ReleaseCreatePage implements OnInit {
   /** A release is created at the end of a sprint, so the default label is the week the sprint started. */
   private async applySprintSize(): Promise<void> {
     try {
-      const { sprintWeeks } = await firstValueFrom(this.settingsService.getSettings());
+      const { sprintWeeks } = await this.settingsService.getSettings();
       if (!sprintWeeks || sprintWeeks < 0) return;
 
       const current = this.defaultSprintLabel();
@@ -196,7 +161,7 @@ export class ReleaseCreatePage implements OnInit {
     this.pageLoadError.set(null);
     this.releaseBlocked.set(null);
     try {
-      const d = await firstValueFrom(this.http.get<ReleaseForBatchContext>(`/api/releases/${id}`));
+      const d = await this.releasesApi.releasesGet({ id });
       const st = (d.status || '').toLowerCase();
       if (st === 'completed' || st === 'archived') {
         this.releaseBlocked.set('This release is completed or archived; you cannot open new PR batches on it.');
@@ -204,7 +169,7 @@ export class ReleaseCreatePage implements OnInit {
       this.existingRelease.set({
         id: d.id,
         title: d.title,
-        sprintLabel: d.sprintLabel,
+        sprintLabel: d.sprintLabel ?? null,
         status: d.status
       });
       this.releaseTitle.set(d.title);
@@ -216,7 +181,7 @@ export class ReleaseCreatePage implements OnInit {
 
   protected async loadTeams(): Promise<void> {
     try {
-      const rows = await firstValueFrom(this.http.get<Team[]>('/api/teams'));
+      const rows = await this.teamsApi.teamsList();
       this.teams.set(rows ?? []);
     } catch {
       this.teams.set([]);
@@ -245,15 +210,15 @@ export class ReleaseCreatePage implements OnInit {
     await this.ensureReposLoaded(teamId);
   }
 
-  protected reposForTeam(teamId: string): RegisteredRepository[] {
+  protected reposForTeam(teamId: string): RegisteredRepositoryDto[] {
     return this.reposByTeam().get(teamId) ?? [];
   }
 
-  protected activeReposForTeam(teamId: string): RegisteredRepository[] {
+  protected activeReposForTeam(teamId: string): RegisteredRepositoryDto[] {
     return this.reposForTeam(teamId).filter(r => !r.isDecommissioned);
   }
 
-  protected decommissionedReposForTeam(teamId: string): RegisteredRepository[] {
+  protected decommissionedReposForTeam(teamId: string): RegisteredRepositoryDto[] {
     return this.reposForTeam(teamId).filter(r => r.isDecommissioned);
   }
 
@@ -270,16 +235,14 @@ export class ReleaseCreatePage implements OnInit {
     this.reposLoadError.set(null);
     this.reposByTeam.update(m => new Map(m).set(teamId, []));
     try {
-      const params: Record<string, string> = { teamId };
-      const orgId = this.selectedOrg.selectedOrgId();
-      if (orgId) params['organizationId'] = orgId;
-      const rows = await firstValueFrom(
-        this.http.get<RegisteredRepository[]>('/api/registered-repositories', { params })
-      );
+      const rows = await this.repositoriesApi.registeredRepositoriesList({
+        teamId,
+        organizationId: this.selectedOrg.selectedOrgId() ?? undefined
+      });
       this.reposByTeam.update(m => new Map(m).set(teamId, rows ?? []));
     } catch (e: unknown) {
       this.reposByTeam.update(m => new Map(m).set(teamId, []));
-      this.reposLoadError.set(this.prettyError(e));
+      this.reposLoadError.set(apiErrorMessage(e));
     } finally {
       this.reposLoading.set(false);
     }
@@ -369,18 +332,14 @@ export class ReleaseCreatePage implements OnInit {
       if (existing) {
         releaseId = existing.id;
       } else {
-        const release = await firstValueFrom(
-          this.http.post<ReleaseSummary>('/api/releases/find-or-create', {
-            title: rt,
-            sprintLabel: this.sprintLabel().trim() || null
-          })
-        );
+        const release = await this.releasesApi.releasesFindOrCreateRelease({
+          body: { title: rt, sprintLabel: this.sprintLabel().trim() || null }
+        });
         releaseId = release.id;
       }
 
-      const phase = this.phaseApiValue(this.phase());
       const batchBase = {
-        phase,
+        phase: this.phase(),
         title: this.prTitle(),
         description: this.description().trim() || null,
         sourceBranch: this.fromBranch().trim() || null,
@@ -399,15 +358,10 @@ export class ReleaseCreatePage implements OnInit {
         if (!ids.length) continue;
 
         const teamName = this.teams().find(t => t.id === tid)?.name ?? tid;
-        const body = { ...batchBase, registeredRepositoryIds: ids };
+        const body: BatchCreateReleasePullRequestsRequest = { ...batchBase, registeredRepositoryIds: ids };
 
         try {
-          const preflight = await firstValueFrom(
-            this.http.post<BatchPreflightResponse>(
-              `/api/releases/${releaseId}/teams/${tid}/pull-requests/preflight`,
-              body
-            )
-          );
+          const preflight = await this.releasesApi.releasesPreflightPullRequests({ releaseId, teamId: tid, body });
 
           for (const repo of preflight.repositories ?? []) {
             if (!repo.ok) {
@@ -417,7 +371,7 @@ export class ReleaseCreatePage implements OnInit {
             }
           }
         } catch (e: unknown) {
-          blocking.push(`${teamName}: preflight failed — ${this.prettyError(e)}`);
+          blocking.push(`${teamName}: preflight failed — ${apiErrorMessage(e)}`);
         }
       }
 
@@ -427,7 +381,7 @@ export class ReleaseCreatePage implements OnInit {
         return;
       }
 
-      const teams: { teamId: string; registeredRepositoryIds: string[] }[] = [];
+      const teams: TeamPullRequestBatch[] = [];
       for (const tid of included) {
         const ids = [...(this.selectedRepoIdsByTeam().get(tid) ?? [])].filter(id => {
           const repo = this.reposForTeam(tid).find(r => r.id === id);
@@ -438,43 +392,27 @@ export class ReleaseCreatePage implements OnInit {
       }
 
       try {
-        const resp = await firstValueFrom(
-          this.http.post<BatchCreateResponse>(
-            `/api/releases/${releaseId}/pull-requests/batch`,
-            { ...batchBase, teams }
-          )
-        );
+        const resp = await this.releasesApi.releasesBatchCreatePullRequestsForTeams({
+          releaseId,
+          body: { ...batchBase, teams }
+        });
         aggregated.push(...(resp?.results ?? []));
         skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
         teamErrors.push(...(resp?.teamErrors ?? []));
       } catch (e: unknown) {
-        teamErrors.push(this.prettyError(e));
+        teamErrors.push(apiErrorMessage(e));
       }
 
       this.created.set({ results: aggregated });
       this.skippedDecommissioned.set(skipped);
       if (teamErrors.length) this.error.set(teamErrors.join(' · '));
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.isSubmitting.set(false);
     }
   }
 
-  private prettyError(e: unknown): string {
-    const http = e as { error?: unknown; message?: string };
-    const body = http?.error;
-    const nested =
-      typeof body === 'object' && body !== null && 'message' in body
-        ? String((body as { message: unknown }).message)
-        : null;
-    return (
-      nested ??
-      (typeof body === 'string' ? body : null) ??
-      http?.message ??
-      'Request failed. Check backend logs for details.'
-    );
-  }
 
   /** ISO calendar week label (yyyy/ww), `weeksBack` weeks before today (handles year boundaries). */
   private defaultSprintLabel(weeksBack = 0): string {

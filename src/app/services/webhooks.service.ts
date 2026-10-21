@@ -1,67 +1,28 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import {
+  CreateWebhookSubscriptionRequest,
+  TestWebhookDraftRequest,
+  UpdateWebhookSubscriptionRequest,
+  WebhookDefaultTemplatesDto,
+  WebhookDestinationKind,
+  WebhookPlaceholderDto,
+  WebhookSettingsDto,
+  WebhookSubscriptionDto,
+  WebhookTestResultDto,
+  WebhooksApi
+} from '../api';
 
-export type WebhookKind = 'Teams' | 'Slack' | 'Discord';
-
-export type WebhookPlaceholder = { token: string; description: string };
-
-export type WebhookDefaultTemplates = {
-  created: string;
-  merged: string;
-  samplePreview: string;
-};
-
-export type WebhookSubscription = {
-  id: string;
-  name: string;
-  kind: WebhookKind;
-  enabled: boolean;
-  urlPreview: string;
-  notifyOnDevToMasterCreated: boolean;
-  notifyOnDevToMasterMerged: boolean;
-  notifyOnMasterToProdCreated: boolean;
-  notifyOnMasterToProdMerged: boolean;
-  templateCreated: string | null;
-  templateMerged: string | null;
-  createdAt: string;
-  updatedAt: string;
-  lastDeliveredAt: string | null;
-  lastDeliveryError: string | null;
-};
-
-export type WebhookSettings = {
-  destinations: WebhookSubscription[];
-  defaults: WebhookDefaultTemplates;
-  placeholders: WebhookPlaceholder[];
-};
-
-export type CreateWebhookRequest = {
-  name: string;
-  kind: WebhookKind;
-  url: string;
-  enabled: boolean;
-  notifyOnDevToMasterCreated: boolean;
-  notifyOnDevToMasterMerged: boolean;
-  notifyOnMasterToProdCreated: boolean;
-  notifyOnMasterToProdMerged: boolean;
-  templateCreated: string | null;
-  templateMerged: string | null;
-};
-
-export type UpdateWebhookRequest = Omit<CreateWebhookRequest, 'kind' | 'url'> & { url: string | null };
-
-export type WebhookTestResult = { ok: boolean; error: string | null };
-
+/** Aliases over the generated contract so pages keep their short, domain-flavoured names. */
+export type WebhookKind = WebhookDestinationKind;
+export type WebhookPlaceholder = WebhookPlaceholderDto;
+export type WebhookDefaultTemplates = WebhookDefaultTemplatesDto;
+export type WebhookSubscription = WebhookSubscriptionDto;
+export type WebhookSettings = WebhookSettingsDto;
+export type CreateWebhookRequest = CreateWebhookSubscriptionRequest;
+export type UpdateWebhookRequest = UpdateWebhookSubscriptionRequest;
+export type WebhookTestResult = WebhookTestResultDto;
 /** Sends a sample message from unsaved form values. When `url` is blank, `existingId`'s stored URL is used. */
-export type TestWebhookDraftRequest = {
-  kind: WebhookKind;
-  url: string | null;
-  existingId: string | null;
-  templateCreated: string | null;
-  templateMerged: string | null;
-  merged: boolean;
-};
+export type { TestWebhookDraftRequest };
 
 const emptyDraft = (): CreateWebhookRequest => ({
   name: '',
@@ -78,30 +39,30 @@ const emptyDraft = (): CreateWebhookRequest => ({
 
 @Injectable({ providedIn: 'root' })
 export class WebhooksService {
-  constructor(private readonly http: HttpClient) {}
+  private readonly api = inject(WebhooksApi);
 
-  getSettings(): Observable<WebhookSettings> {
-    return this.http.get<WebhookSettings>('/api/settings/webhooks');
+  getSettings(): Promise<WebhookSettings> {
+    return this.api.webhooksList();
   }
 
-  create(request: CreateWebhookRequest): Observable<WebhookSubscription> {
-    return this.http.post<WebhookSubscription>('/api/settings/webhooks', request);
+  create(request: CreateWebhookRequest): Promise<WebhookSubscription> {
+    return this.api.webhooksCreate({ body: request });
   }
 
-  update(id: string, request: UpdateWebhookRequest): Observable<WebhookSubscription> {
-    return this.http.put<WebhookSubscription>(`/api/settings/webhooks/${id}`, request);
+  update(id: string, request: UpdateWebhookRequest): Promise<WebhookSubscription> {
+    return this.api.webhooksUpdate({ id, body: request });
   }
 
-  delete(id: string): Observable<void> {
-    return this.http.delete<void>(`/api/settings/webhooks/${id}`);
+  delete(id: string): Promise<void> {
+    return this.api.webhooksDelete({ id });
   }
 
-  test(id: string, merged = false): Observable<WebhookTestResult> {
-    return this.http.post<WebhookTestResult>(`/api/settings/webhooks/${id}/test`, {}, { params: { merged } });
+  test(id: string, merged = false): Promise<WebhookTestResult> {
+    return this.api.webhooksTest({ id, merged });
   }
 
-  testDraft(request: TestWebhookDraftRequest): Observable<WebhookTestResult> {
-    return this.http.post<WebhookTestResult>('/api/settings/webhooks/test', request);
+  testDraft(request: TestWebhookDraftRequest): Promise<WebhookTestResult> {
+    return this.api.webhooksTestDraft({ body: request });
   }
 
   emptyDraft(): CreateWebhookRequest {

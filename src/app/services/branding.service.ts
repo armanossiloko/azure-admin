@@ -1,13 +1,8 @@
 import { DOCUMENT } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { BrandingApi, BrandingDto } from '../api';
 
-export type Branding = {
-  applicationName: string;
-  tagline: string;
-  description: string;
-};
+export type Branding = BrandingDto;
 
 /** Built-in defaults — keep in sync with backend BrandingDefaults. */
 export const DEFAULT_BRANDING: Branding = {
@@ -19,7 +14,7 @@ export const DEFAULT_BRANDING: Branding = {
 
 @Injectable({ providedIn: 'root' })
 export class BrandingService {
-  private readonly http = inject(HttpClient);
+  private readonly brandingApi = inject(BrandingApi);
   private readonly doc = inject(DOCUMENT);
 
   readonly branding = signal<Branding>({ ...DEFAULT_BRANDING });
@@ -51,7 +46,7 @@ export class BrandingService {
 
   private async fetchAndApply(): Promise<Branding> {
     try {
-      const remote = await firstValueFrom(this.http.get<Partial<Branding>>('/api/branding'));
+      const remote = await this.brandingApi.brandingGet();
       const next = normalizeBranding(remote);
       this.branding.set(next);
       this.applyDocument(next);
@@ -75,7 +70,7 @@ export class BrandingService {
   }
 }
 
-function normalizeBranding(value: Partial<Branding> | null | undefined): Branding {
+export function normalizeBranding(value: Partial<Branding> | null | undefined): Branding {
   return {
     applicationName: value?.applicationName?.trim() || DEFAULT_BRANDING.applicationName,
     tagline: value?.tagline?.trim() || DEFAULT_BRANDING.tagline,

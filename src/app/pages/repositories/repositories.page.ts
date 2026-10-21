@@ -1,35 +1,20 @@
 import { CommonModule } from '@angular/common';
 import { Component, effect, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import {
+  AzureCatalogProjectDto,
+  AzureCatalogRepositoryDto,
+  AzureDevOpsCatalogApi,
+  AzureDevOpsOrganizationsApi,
+  AzureDevOpsOrganizationSummaryDto,
+  PatchRegisteredRepositoryRequest,
+  RegisteredRepositoriesApi,
+  RegisteredRepositoryDto,
+  TeamDto,
+  TeamsApi,
+  apiErrorMessage
+} from '../../api';
 import { SelectedOrgService } from '../../services/selected-org.service';
-
-type Team = { id: string; name: string };
-
-type RegisteredRepository = {
-  id: string;
-  azureDevOpsOrganization: string;
-  azureDevOpsProject: string;
-  repositoryIdOrName: string;
-  serviceName: string | null;
-  teamId: string;
-  isDecommissioned: boolean;
-};
-
-type AdoOrgSummary = {
-  id: string;
-  organizationKey: string;
-  organizationDisplay: string;
-  notes: string | null;
-  hasPatCredential: boolean;
-  patCredentialId: string | null;
-  patUpdatedAt: string | null;
-  patExpiresAt: string | null;
-};
-
-type CatalogProject = { id: string; name: string };
-type CatalogRepo = { id: string; name: string; projectName: string };
 
 @Component({
   standalone: true,
@@ -39,9 +24,14 @@ type CatalogRepo = { id: string; name: string; projectName: string };
 })
 export class RepositoriesPage implements OnInit {
   private readonly selectedOrg = inject(SelectedOrgService);
-  protected readonly teams = signal<Team[]>([]);
-  protected readonly adoOrgs = signal<AdoOrgSummary[]>([]);
-  protected readonly rows = signal<RegisteredRepository[]>([]);
+  private readonly teamsApi = inject(TeamsApi);
+  private readonly organizationsApi = inject(AzureDevOpsOrganizationsApi);
+  private readonly catalogApi = inject(AzureDevOpsCatalogApi);
+  private readonly repositoriesApi = inject(RegisteredRepositoriesApi);
+
+  protected readonly teams = signal<TeamDto[]>([]);
+  protected readonly adoOrgs = signal<AzureDevOpsOrganizationSummaryDto[]>([]);
+  protected readonly rows = signal<RegisteredRepositoryDto[]>([]);
   protected readonly filterTeamId = signal<string>('');
   protected readonly statusFilter = signal('');
   protected readonly error = signal<string | null>(null);
@@ -55,14 +45,14 @@ export class RepositoriesPage implements OnInit {
   protected readonly registerTeamId = signal<string>('');
 
   protected readonly importOrgId = signal<string>('');
-  protected readonly importProjects = signal<CatalogProject[]>([]);
+  protected readonly importProjects = signal<AzureCatalogProjectDto[]>([]);
   protected readonly importProjectName = signal<string>('');
-  protected readonly importRepos = signal<CatalogRepo[]>([]);
+  protected readonly importRepos = signal<AzureCatalogRepositoryDto[]>([]);
   protected readonly importTeamId = signal<string>('');
   protected readonly importSelectedRepoIds = signal<ReadonlySet<string>>(new Set());
   protected readonly importCatalogBusy = signal(false);
 
-  constructor(private readonly http: HttpClient) {
+  constructor() {
     effect(() => {
       const id = this.selectedOrg.selectedOrgId();
       if (id) this.importOrgId.set(id);
@@ -79,7 +69,7 @@ export class RepositoriesPage implements OnInit {
 
   protected async loadTeams(): Promise<void> {
     try {
-      const list = await firstValueFrom(this.http.get<Team[]>('/api/teams'));
+      const list = await this.teamsApi.teamsList();
       this.teams.set(list ?? []);
     } catch {
       this.teams.set([]);
@@ -88,7 +78,7 @@ export class RepositoriesPage implements OnInit {
 
   protected async loadAdoOrgs(): Promise<void> {
     try {
-      const list = await firstValueFrom(this.http.get<AdoOrgSummary[]>('/api/azure-devops/organizations'));
+      const list = await this.organizationsApi.azureDevOpsOrganizationsList();
       this.adoOrgs.set(list ?? []);
     } catch {
       this.adoOrgs.set([]);
@@ -97,25 +87,18 @@ export class RepositoriesPage implements OnInit {
 
   protected async refresh(): Promise<void> {
     this.error.set(null);
-    const tid = this.filterTeamId().trim();
-    const orgQ = this.selectedOrg.organizationQueryParam();
     try {
-      const params = new URLSearchParams();
-      if (tid) params.set('teamId', tid);
-      if (orgQ) {
-        const orgId = this.selectedOrg.selectedOrgId();
-        if (orgId) params.set('organizationId', orgId);
-      }
-      const qs = params.toString();
-      const url = qs ? `/api/registered-repositories?${qs}` : '/api/registered-repositories';
-      const list = await firstValueFrom(this.http.get<RegisteredRepository[]>(url));
+      const list = await this.repositoriesApi.registeredRepositoriesList({
+        teamId: this.filterTeamId().trim() || undefined,
+        organizationId: this.selectedOrg.selectedOrgId() ?? undefined
+      });
       this.rows.set(list ?? []);
     } catch {
       this.error.set('Failed to load repositories.');
     }
   }
 
-  protected selectedAdoOrg(): AdoOrgSummary | undefined {
+  protected selectedAdoOrg(): AzureDevOpsOrganizationSummaryDto | undefined {
     const id = this.importOrgId().trim();
     return this.adoOrgs().find(o => o.id === id);
   }
@@ -136,13 +119,11 @@ export class RepositoriesPage implements OnInit {
     this.importCatalogBusy.set(true);
     this.error.set(null);
     try {
-      const list = await firstValueFrom(
-        this.http.get<CatalogProject[]>(`/api/azure-devops/catalog/organizations/${org.id}/projects`)
-      );
+      const list = await this.catalogApi.azureDevOpsCatalogListProjects({ organizationId: org.id });
       this.importProjects.set(list ?? []);
     } catch (e: unknown) {
       this.importProjects.set([]);
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.importCatalogBusy.set(false);
     }
@@ -157,15 +138,11 @@ export class RepositoriesPage implements OnInit {
     this.importCatalogBusy.set(true);
     this.error.set(null);
     try {
-      const list = await firstValueFrom(
-        this.http.get<CatalogRepo[]>(
-          `/api/azure-devops/catalog/organizations/${org.id}/repositories?project=${encodeURIComponent(project)}`
-        )
-      );
+      const list = await this.catalogApi.azureDevOpsCatalogListRepositories({ organizationId: org.id, project });
       this.importRepos.set(list ?? []);
     } catch (e: unknown) {
       this.importRepos.set([]);
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.importCatalogBusy.set(false);
     }
@@ -224,7 +201,7 @@ export class RepositoriesPage implements OnInit {
     }
 
     const byId = new Map(this.importRepos().map(r => [r.id, r]));
-    const toImport = [...selectedIds].map(id => byId.get(id)).filter((r): r is CatalogRepo => !!r);
+    const toImport = [...selectedIds].map(id => byId.get(id)).filter((r): r is AzureCatalogRepositoryDto => !!r);
 
     this.busy.set(true);
     this.error.set(null);
@@ -235,18 +212,18 @@ export class RepositoriesPage implements OnInit {
 
     for (const r of toImport) {
       try {
-        await firstValueFrom(
-          this.http.post('/api/registered-repositories', {
+        await this.repositoriesApi.registeredRepositoriesRegister({
+          body: {
             azureDevOpsOrganization: org.organizationDisplay,
             azureDevOpsProject: projectName,
             repositoryIdOrName: r.name,
             serviceName: null,
             teamId
-          })
-        );
+          }
+        });
         ok++;
       } catch (e: unknown) {
-        failures.push(`${r.name}: ${this.fmtErr(e)}`);
+        failures.push(`${r.name}: ${apiErrorMessage(e)}`);
       }
     }
 
@@ -274,15 +251,15 @@ export class RepositoriesPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.post('/api/registered-repositories', {
+      await this.repositoriesApi.registeredRepositoriesRegister({
+        body: {
           azureDevOpsOrganization: this.org().trim(),
           azureDevOpsProject: this.project().trim(),
           repositoryIdOrName: this.repo().trim(),
           serviceName: this.serviceName().trim() || null,
           teamId
-        })
-      );
+        }
+      });
       this.org.set('');
       this.project.set('');
       this.repo.set('');
@@ -290,29 +267,29 @@ export class RepositoriesPage implements OnInit {
       this.info.set('Repository registered.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
   }
 
-  protected async remove(row: RegisteredRepository): Promise<void> {
+  protected async remove(row: RegisteredRepositoryDto): Promise<void> {
     if (!confirm(`Remove registration for “${row.repositoryIdOrName}”?`)) return;
     this.busy.set(true);
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(this.http.delete(`/api/registered-repositories/${row.id}`));
+      await this.repositoriesApi.registeredRepositoriesDelete({ id: row.id });
       this.info.set('Removed.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
   }
 
-  protected visibleRows(): RegisteredRepository[] {
+  protected visibleRows(): RegisteredRepositoryDto[] {
     const filter = this.statusFilter().trim();
     const rows = this.rows();
     if (filter === 'active') return rows.filter(r => !r.isDecommissioned);
@@ -320,7 +297,7 @@ export class RepositoriesPage implements OnInit {
     return rows;
   }
 
-  protected async setDecommissioned(row: RegisteredRepository, decommissioned: boolean): Promise<void> {
+  protected async setDecommissioned(row: RegisteredRepositoryDto, decommissioned: boolean): Promise<void> {
     const label = row.serviceName?.trim() || row.repositoryIdOrName;
     if (decommissioned && !confirm(`Decommission “${label}”? Future releases will not open pull requests for it.`)) {
       return;
@@ -329,15 +306,11 @@ export class RepositoriesPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.patch(`/api/registered-repositories/${row.id}`, {
-          isDecommissioned: decommissioned
-        })
-      );
+      await this.patch(row, { isDecommissioned: decommissioned });
       this.info.set(decommissioned ? `${label} is decommissioned and will be skipped on the next release.` : `${label} is active again.`);
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
@@ -347,26 +320,24 @@ export class RepositoriesPage implements OnInit {
     return this.teams().find(t => t.id === id)?.name ?? id;
   }
 
-  protected async onTeamChange(row: RegisteredRepository, teamId: string): Promise<void> {
+  protected async onTeamChange(row: RegisteredRepositoryDto, teamId: string): Promise<void> {
     if (!teamId || teamId === row.teamId) return;
     this.busy.set(true);
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.patch(`/api/registered-repositories/${row.id}`, { teamId })
-      );
+      await this.patch(row, { teamId });
       this.info.set(`Moved ${row.serviceName?.trim() || row.repositoryIdOrName} to ${this.teamLabel(teamId)}.`);
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
       await this.refresh();
     } finally {
       this.busy.set(false);
     }
   }
 
-  protected async onAliasBlur(row: RegisteredRepository, ev: Event): Promise<void> {
+  protected async onAliasBlur(row: RegisteredRepositoryDto, ev: Event): Promise<void> {
     const el = ev.target as HTMLInputElement;
     const v = el.value.trim();
     const current = (row.serviceName ?? '').trim();
@@ -375,28 +346,18 @@ export class RepositoriesPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.patch(`/api/registered-repositories/${row.id}`, {
-          serviceName: v || null
-        })
-      );
+      await this.patch(row, { serviceName: v || null });
       this.info.set('Display name updated.');
       await this.refresh();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
       el.value = row.serviceName ?? '';
     } finally {
       this.busy.set(false);
     }
   }
 
-  private fmtErr(e: unknown): string {
-    const http = e as { error?: unknown };
-    const body = http?.error;
-    if (typeof body === 'object' && body !== null && 'message' in body) {
-      return String((body as { message: unknown }).message);
-    }
-    if (typeof body === 'string') return body;
-    return 'Request failed.';
+  private patch(row: RegisteredRepositoryDto, body: PatchRegisteredRepositoryRequest): Promise<RegisteredRepositoryDto> {
+    return this.repositoriesApi.registeredRepositoriesPatch({ id: row.id, body });
   }
 }

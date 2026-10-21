@@ -23,9 +23,4 @@ export class SelectedOrgService {
       /* ignore */
     }
   }
-
-  organizationQueryParam(): string | null {
-    const id = this.selectedOrgId();
-    return id ? `organizationId=${encodeURIComponent(id)}` : null;
-  }
 }
