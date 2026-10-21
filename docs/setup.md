@@ -62,6 +62,27 @@ Azure Admin can POST one summary message for **dev → master created**, **dev �
 
 The webhook URL is encrypted at rest and only a masked preview is shown after save. Delivery failures are recorded on the destination and never fail PR creation.
 
+## Background pull request status sync
+
+The API re-checks every still-active pull request on Draft/Active releases against Azure DevOps on a timer (default every 5 minutes, first run 30 s after startup). Merged PRs therefore show up, in-app "PR merged" notifications and phase-complete chat messages fire, and dashboard counts stay current without anyone opening the release page or clicking **Check status**.
+
+PATs are per user, so each PR is checked with the PAT of the user who opened it; for PRs opened before this feature (or when that user's PAT expired) the sync uses whichever user most recently saved a valid PAT for that organization. PRs in an organization nobody holds a PAT for keep their last known status until someone refreshes manually.
+
+Configuration (`PullRequestSync` section; env vars `PullRequestSync__*`):
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `Enabled` | `true` | Set `false` to go back to manual refresh only |
+| `IntervalMinutes` | `5` | 1 to 1440 |
+| `InitialDelaySeconds` | `30` | Lets migrations finish before the first run |
+| `MaxConcurrency` | `4` | Concurrent Azure DevOps lookups per release |
+
+With Helm, pass these through `extraEnv` (for example `PullRequestSync__IntervalMinutes: "10"`). Run a single replica, as the chart defaults to; every replica would poll independently.
+
+## Azure DevOps call resilience
+
+All calls to `dev.azure.com` go through two named HTTP clients. Reads retry up to three times with exponential backoff on 5xx, 408, and 429 (honouring `Retry-After`), with a 30 s per-attempt and 120 s total timeout plus a circuit breaker. Writes (create PR, complete PR, delete branch) are retried only on 429/503, which Azure DevOps returns before processing the request, so a retry can never open a duplicate pull request.
+
 ## First-run checklist
 
 1. Sign in via Keycloak.
@@ -80,7 +101,7 @@ The dashboard onboarding checklist mirrors these steps.
    - **Prod → Dev** when prod is ahead of dev (back-merge).
    - **Dev → Master** for promotion into master.
    - **Master → Prod** only after the matching Dev → Master PR is **Completed** (gate).
-4. **Status sync** — open a release detail page or click **Check status** to refresh ADO PR status.
+4. **Status sync** — refreshed automatically in the background (see above); open a release detail page or click **Check status** for an immediate refresh.
 5. **Complete** — **Complete all (rebase)** merges open PRs in a phase via ADO.
 6. **Close / Archive** — **Close release** → `Completed` (blocks further batches); **Archive** → `Archived`.
 

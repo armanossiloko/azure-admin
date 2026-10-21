@@ -2,7 +2,7 @@
 
 Setup, Keycloak, ADO PAT scopes, and the release workflow: [setup.md](setup.md). Product overview: [README](../README.md).
 
-In-app notifications cover PAT expiry, PR merged (on status sync), and batch failures. **Teams / Slack / Discord** outgoing webhooks can post one summary per PR batch (Settings → Chat notifications). There is no email digest.
+In-app notifications cover PAT expiry, PR merged (on manual or background status sync), and batch failures. **Teams / Slack / Discord** outgoing webhooks can post one summary per PR batch (Settings → Chat notifications). There is no email digest.
 
 ---
 
@@ -57,7 +57,7 @@ In-app notifications cover PAT expiry, PR merged (on status sync), and batch fai
 | Branch existence check | Before batch create |
 | Policy awareness | Warn if branch policies block complete |
 | Import teams from ADO | Map ADO teams/projects → app teams |
-| ADO webhooks | Push PR status updates instead of poll |
+| ADO webhooks | Push PR status updates instead of the built-in background poll (`PullRequestSync`) |
 
 ### Teams, repos & catalog
 
@@ -87,7 +87,7 @@ In-app notifications cover PAT expiry, PR merged (on status sync), and batch fai
 | RBAC | Admin / operator / read-only via Keycloak roles |
 | Audit log | Who ran batches, changed settings, deleted releases |
 | API tokens for CI | Headless “create release PRs” from pipeline |
-| Rate limit / retry | Safer ADO batch calls |
+| Rate limit / retry | Done: named `AzureDevOps.Read` / `AzureDevOps.Write` clients with retry, timeouts, and a circuit breaker |
 | Richer readiness | DB, Keycloak, ADO in probes |
 | OpenTelemetry / metrics | Batch duration, ADO error rates |
 | Backup / export | Release history JSON |

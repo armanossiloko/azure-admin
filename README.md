@@ -10,6 +10,7 @@ Admin app for **teams**, **registered Azure DevOps repositories**, **release tra
 - **Releases** — Draft releases with sprint labels; attach teams; batch-create **dev → master** and **master → prod** pull requests via the Azure DevOps REST API; store PR metadata and optional **commit notes** between branch pairs.
 - **Azure DevOps settings** — Per-user organizations (URL slug) and **encrypted PAT** storage (Data Protection + EF), plus a **catalog** API to list projects and Git repos for import flows.
 - **Chat notifications** — Optional Teams, Slack, or Discord incoming webhooks with a built-in template and per-event toggles (dev → master / master → prod, created or merged).
+- **Background status sync** — Active pull requests are re-checked against Azure DevOps every few minutes (configurable, `PullRequestSync__*`), so merges, notifications, and dashboard counts stay current without manual refreshes. Azure DevOps calls retry on throttling and transient failures.
 
 The API calls Azure DevOps with each user’s stored PAT; there is no global ADO service account.
 
@@ -51,6 +52,10 @@ azure-admin/
 Copy `.env.example` to `.env` for Docker Compose (Postgres, Keycloak, Azure DevOps API version).
 
 For local API runs, set `Postgres` and `Keycloak` in `src-backend/AzureAdmin.API/appsettings.json` or via environment variables (`Postgres__Host`, `Keycloak__Authority`, etc.). See `.gitignore` for local secret patterns (`appsettings.*.local.json`, `.env`).
+
+Optional: `PullRequestSync__Enabled`, `PullRequestSync__IntervalMinutes` (background PR status sync; see [docs/setup.md](docs/setup.md)).
+
+API errors are JSON problem details with a top-level `message` (RFC 7807 fields plus `message` and `traceId`).
 
 ## Run
 
