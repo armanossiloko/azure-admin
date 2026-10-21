@@ -69,6 +69,11 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.HasKey(x => x.Id);
             e.Property(x => x.Title).HasMaxLength(512).IsRequired();
             e.Property(x => x.SprintLabel).HasMaxLength(128);
+            e.Property(x => x.ConcurrencyStamp).IsConcurrencyToken();
+            e.HasOne(x => x.CreatedBy)
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ReleaseTeam>(e =>
@@ -213,5 +218,41 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.Property(x => x.LastDeliveryError).HasMaxLength(2000);
             e.HasIndex(x => x.Enabled);
         });
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampReleases();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampReleases();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Every write to a release gets a fresh concurrency stamp, and edits also record <see cref="Release.UpdatedAt"/>.
+    /// Doing it here covers all writers (controller edits, the batch service promoting a release to Active, ...).
+    /// The stamp's original value stays whatever was loaded (or what the client sent), so EF's UPDATE ... WHERE
+    /// still detects a concurrent change.
+    /// </summary>
+    private void StampReleases()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var entry in ChangeTracker.Entries<Release>())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.Entity.ConcurrencyStamp ??= Guid.NewGuid();
+                    break;
+                case EntityState.Modified:
+                    entry.Entity.UpdatedAt = now;
+                    entry.Entity.ConcurrencyStamp = Guid.NewGuid();
+                    break;
+            }
+        }
     }
 }

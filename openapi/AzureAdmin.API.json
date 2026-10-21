@@ -3145,6 +3145,25 @@
             "items": {
               "$ref": "#/components/schemas/ReleaseRepositoryCommitNotesDto"
             }
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -3359,6 +3378,25 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -3619,6 +3657,11 @@
                 "$ref": "#/components/schemas/ReleaseLifecycleStatus"
               }
             ],
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
             "nullable": true
           }
         },

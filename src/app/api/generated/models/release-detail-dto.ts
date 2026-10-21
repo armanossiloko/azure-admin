@@ -6,7 +6,10 @@ import { ReleasePullRequestDto } from '../models/release-pull-request-dto';
 import { ReleaseRepositoryCommitNotesDto } from '../models/release-repository-commit-notes-dto';
 import { ReleaseTeamDto } from '../models/release-team-dto';
 export interface ReleaseDetailDto {
+  concurrencyStamp?: string | null;
   createdAt: string;
+  createdByName?: string | null;
+  createdByUserId?: string | null;
   id: string;
   pullRequests: Array<ReleasePullRequestDto>;
   repositoryCommitNotes: Array<ReleaseRepositoryCommitNotesDto>;
@@ -14,4 +17,5 @@ export interface ReleaseDetailDto {
   status: ReleaseLifecycleStatus;
   teams: Array<ReleaseTeamDto>;
   title: string;
+  updatedAt?: string | null;
 }

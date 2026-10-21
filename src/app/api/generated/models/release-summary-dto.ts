@@ -3,9 +3,13 @@
 
 import { ReleaseLifecycleStatus } from '../models/release-lifecycle-status';
 export interface ReleaseSummaryDto {
+  concurrencyStamp?: string | null;
   createdAt: string;
+  createdByName?: string | null;
+  createdByUserId?: string | null;
   id: string;
   sprintLabel?: string | null;
   status: ReleaseLifecycleStatus;
   title: string;
+  updatedAt?: string | null;
 }

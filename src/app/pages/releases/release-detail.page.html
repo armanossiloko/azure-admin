@@ -27,7 +27,12 @@
         <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
           <span [class]="statusBadgeClass(rel.status)">{{ rel.status }}</span>
           <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
-          <span>· Created {{ rel.createdAt | date: 'medium' }}</span>
+          <span [title]="rel.createdAt | date: 'full'">
+            · Created {{ rel.createdAt | date: 'medium' }}@if (rel.createdByName) { by {{ rel.createdByName }}}
+          </span>
+          @if (rel.updatedAt) {
+            <span [title]="rel.updatedAt | date: 'full'">· Updated {{ rel.updatedAt | date: 'medium' }}</span>
+          }
           @if (!isReleaseClosed(rel.status) || (rel.status || '').toLowerCase() === 'completed') {
             <button type="button" class="btn btn-sm btn-ghost" (click)="startEditMeta()">Edit</button>
           }

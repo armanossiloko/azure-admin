@@ -107,6 +107,8 @@ The dashboard onboarding checklist mirrors these steps.
 
 Commit notes can be refreshed from ADO and exported as markdown. Conventional-commit grouping and Jira link extraction are controlled in global **Settings**.
 
+Each release records who created it and when it was last edited (shown on the list and detail pages; releases created before this was tracked show no creator). Edits are guarded by a concurrency stamp: if someone else changed the release after you opened it, your save is rejected with **409 Conflict**, the page reloads their version, and you can reapply your change. API clients opt in by sending the `concurrencyStamp` they read back in `PATCH /api/releases/{id}`; requests without it are applied as before.
+
 ## Organization switcher
 
 The sidebar organization filters repositories, teams (with repos in that org), releases (derived from those repos/teams), dashboard stats, and global search. Releases themselves have no `OrganizationId` column; empty drafts (no teams/PRs yet) still appear under any selected org so new work is visible.

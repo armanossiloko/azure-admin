@@ -3,6 +3,7 @@
 
 import { ReleaseLifecycleStatus } from '../models/release-lifecycle-status';
 export interface UpdateReleaseRequest {
+  concurrencyStamp?: string | null;
   sprintLabel?: string | null;
   status?: ReleaseLifecycleStatus | null;
   title?: string | null;

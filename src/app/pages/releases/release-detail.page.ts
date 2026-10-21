@@ -13,7 +13,8 @@ import {
   ReleaseRepositoryCommitNotesDto,
   ReleasesApi,
   UpdateReleaseRequest,
-  apiErrorMessage
+  apiErrorMessage,
+  apiErrorStatus
 } from '../../api';
 
 type PhaseBucketKey = 'dev' | 'prod' | 'backmerge';
@@ -58,6 +59,8 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly editTitle = signal('');
   protected readonly editSprint = signal('');
   protected readonly editStatus = signal<ReleaseLifecycleStatus>('Draft');
+  /** Concurrency stamp of the release as it was when the edit form opened. */
+  private editStamp: string | null = null;
   protected readonly collapsedPhases = signal<ReadonlySet<PhaseBucketKey>>(new Set());
   protected readonly collapsedNotePhases = signal<ReadonlySet<PhaseBucketKey>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
@@ -191,11 +194,14 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await this.releasesApi.releasesUpdate({ id: rel.id, body: { status: 'Active' } });
+      await this.releasesApi.releasesUpdate({
+        id: rel.id,
+        body: { status: 'Active', concurrencyStamp: rel.concurrencyStamp }
+      });
       await this.loadRelease(rel.id);
       this.copyMessage.set('Release marked Active.');
     } catch (e: unknown) {
-      this.error.set(apiErrorMessage(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }
@@ -207,6 +213,7 @@ export class ReleaseDetailPage implements OnInit {
     this.editTitle.set(rel.title);
     this.editSprint.set(rel.sprintLabel ?? '');
     this.editStatus.set(rel.status || 'Draft');
+    this.editStamp = rel.concurrencyStamp ?? null;
     this.editingMeta.set(true);
   }
 
@@ -242,7 +249,8 @@ export class ReleaseDetailPage implements OnInit {
     try {
       const body: UpdateReleaseRequest = {
         title,
-        sprintLabel: this.editSprint().trim()
+        sprintLabel: this.editSprint().trim(),
+        concurrencyStamp: this.editStamp
       };
       const nextStatus = this.editStatus();
       if (nextStatus !== rel.status) body.status = nextStatus;
@@ -252,7 +260,8 @@ export class ReleaseDetailPage implements OnInit {
       await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release details updated.');
     } catch (e: unknown) {
-      this.error.set(apiErrorMessage(e));
+      // On a conflict the form stays open with the user's values; saving again applies them on top.
+      if (await this.reportUpdateError(e, rel.id)) this.editStamp = this.release()?.concurrencyStamp ?? null;
     } finally {
       this.savingMeta.set(false);
     }
@@ -266,14 +275,31 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await this.releasesApi.releasesUpdate({ id: rel.id, body: { status: 'Archived' } });
+      await this.releasesApi.releasesUpdate({
+        id: rel.id,
+        body: { status: 'Archived', concurrencyStamp: rel.concurrencyStamp }
+      });
       await this.loadRelease(rel.id);
       this.copyMessage.set('Release archived.');
     } catch (e: unknown) {
-      this.error.set(apiErrorMessage(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }
+  }
+
+  /**
+   * Shows why an edit failed. A 409 means someone else changed the release since it was loaded: reload it so
+   * the page shows their change, and say so. Returns true for that conflict case.
+   */
+  private async reportUpdateError(e: unknown, releaseId: string): Promise<boolean> {
+    if (apiErrorStatus(e) !== 409) {
+      this.error.set(apiErrorMessage(e));
+      return false;
+    }
+    await this.loadRelease(releaseId, { syncStatuses: false });
+    this.error.set('Someone else changed this release while you had it open. The page now shows their changes; review them and try again.');
+    return true;
   }
 
   protected async removePullRequest(pr: ReleasePullRequestDto): Promise<void> {

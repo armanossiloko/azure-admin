@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Net.Http;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
@@ -18,6 +19,21 @@ namespace AzureAdmin.API.Controllers.Releases;
 [Route("api/releases")]
 public sealed class ReleasesController : ControllerBase
 {
+    private const string StaleReleaseMessage =
+        "This release was changed by someone else since you opened it. Reload to see the latest version, then reapply your edit.";
+
+    /// <summary>Single projection for release summaries so every endpoint returns the same metadata.</summary>
+    private static readonly Expression<Func<Release, ReleaseSummaryDto>> ToSummary = r => new ReleaseSummaryDto(
+        r.Id,
+        r.Title,
+        r.SprintLabel,
+        r.Status,
+        r.CreatedAt,
+        r.CreatedByUserId,
+        r.CreatedBy != null ? (r.CreatedBy.DisplayName ?? r.CreatedBy.Email) : null,
+        r.UpdatedAt,
+        r.ConcurrencyStamp);
+
     private readonly ApplicationDbContext _db;
     private readonly ReleasePullRequestBatchService _batchService;
     private readonly ReleaseCommitNotesService _commitNotes;
@@ -87,7 +103,7 @@ public sealed class ReleasesController : ControllerBase
 
         var rows = await query
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new ReleaseSummaryDto(r.Id, r.Title, r.SprintLabel, r.Status, r.CreatedAt))
+            .Select(ToSummary)
             .ToListAsync(cancellationToken);
 
         return Ok(rows);
@@ -111,7 +127,7 @@ public sealed class ReleasesController : ControllerBase
                 (sprint == null && r.SprintLabel == null) ||
                 (sprint != null && r.SprintLabel != null && EF.Functions.ILike(r.SprintLabel, sprint)))
             .OrderBy(r => r.CreatedAt)
-            .Select(r => new ReleaseSummaryDto(r.Id, r.Title, r.SprintLabel, r.Status, r.CreatedAt))
+            .Select(ToSummary)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (existing is not null)
@@ -123,14 +139,14 @@ public sealed class ReleasesController : ControllerBase
             Title = title,
             SprintLabel = sprint,
             Status = ReleaseLifecycleStatus.Draft,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedByUserId = _currentUser.UserId
         };
 
         _db.Releases.Add(entity);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var dto = new ReleaseSummaryDto(entity.Id, entity.Title, entity.SprintLabel, entity.Status, entity.CreatedAt);
-        return CreatedAtAction(nameof(Get), new { id = entity.Id }, dto);
+        return CreatedAtAction(nameof(Get), new { id = entity.Id }, await LoadSummaryAsync(entity.Id, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -145,7 +161,11 @@ public sealed class ReleasesController : ControllerBase
                 r.Title,
                 r.SprintLabel,
                 r.Status,
-                r.CreatedAt
+                r.CreatedAt,
+                r.CreatedByUserId,
+                CreatedByName = r.CreatedBy != null ? (r.CreatedBy.DisplayName ?? r.CreatedBy.Email) : null,
+                r.UpdatedAt,
+                r.ConcurrencyStamp
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -220,7 +240,11 @@ public sealed class ReleasesController : ControllerBase
             release.CreatedAt,
             teams,
             prs,
-            notesDtos));
+            notesDtos,
+            release.CreatedByUserId,
+            release.CreatedByName,
+            release.UpdatedAt,
+            release.ConcurrencyStamp));
     }
 
     [HttpPost]
@@ -237,14 +261,14 @@ public sealed class ReleasesController : ControllerBase
             Title = request.Title.Trim(),
             SprintLabel = string.IsNullOrWhiteSpace(request.SprintLabel) ? null : request.SprintLabel.Trim(),
             Status = ReleaseLifecycleStatus.Draft,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedByUserId = _currentUser.UserId
         };
 
         _db.Releases.Add(entity);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var dto = new ReleaseSummaryDto(entity.Id, entity.Title, entity.SprintLabel, entity.Status, entity.CreatedAt);
-        return CreatedAtAction(nameof(Get), new { id = entity.Id }, dto);
+        return CreatedAtAction(nameof(Get), new { id = entity.Id }, await LoadSummaryAsync(entity.Id, cancellationToken));
     }
 
     [HttpPost("{releaseId:guid}/teams/{teamId:guid}/pull-requests/preflight")]
@@ -374,6 +398,15 @@ public sealed class ReleasesController : ControllerBase
         if (release is null)
             return NotFound();
 
+        if (request.ConcurrencyStamp is { } expectedStamp)
+        {
+            if (expectedStamp != release.ConcurrencyStamp)
+                return Conflict(new { message = StaleReleaseMessage });
+
+            // Also guard the window between this read and the write: EF compares against the original value.
+            _db.Entry(release).Property(r => r.ConcurrencyStamp).OriginalValue = expectedStamp;
+        }
+
         if (request.Title is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Title))
@@ -397,8 +430,16 @@ public sealed class ReleasesController : ControllerBase
             release.Status = newStatus;
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
-        return Ok(new ReleaseSummaryDto(release.Id, release.Title, release.SprintLabel, release.Status, release.CreatedAt));
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = StaleReleaseMessage });
+        }
+
+        return Ok(await LoadSummaryAsync(release.Id, cancellationToken));
     }
 
     [HttpDelete("{releaseId:guid}/pull-requests/{pullRequestId:guid}")]
@@ -513,7 +554,7 @@ public sealed class ReleasesController : ControllerBase
         release.Status = ReleaseLifecycleStatus.Completed;
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(new ReleaseSummaryDto(release.Id, release.Title, release.SprintLabel, release.Status, release.CreatedAt));
+        return Ok(await LoadSummaryAsync(release.Id, cancellationToken));
     }
 
     [HttpDelete("{id:guid}")]
@@ -527,6 +568,9 @@ public sealed class ReleasesController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
+
+    private Task<ReleaseSummaryDto> LoadSummaryAsync(Guid id, CancellationToken cancellationToken) =>
+        _db.Releases.AsNoTracking().Where(r => r.Id == id).Select(ToSummary).FirstAsync(cancellationToken);
 
     private IReadOnlyList<CommitGroupDto>? BuildCommitGroups(
         IReadOnlyList<ReleaseCommitItemDto> commits,
