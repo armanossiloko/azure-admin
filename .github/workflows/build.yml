@@ -17,7 +17,38 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Backend (xUnit) and frontend (Vitest) unit tests gate every release and image build.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Backend tests
+        run: dotnet test src-backend/AzureAdmin.API.Tests/AzureAdmin.API.Tests.csproj --configuration Release --logger "trx;LogFileName=backend.trx" --results-directory test-results
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Frontend tests
+        run: npx ng test --watch=false
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: ignore
+
   release:
+    needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -48,8 +79,9 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
   image:
-    needs: release
-    if: ${{ !cancelled() && needs.release.result != 'failure' }}
+    needs: [test, release]
+    # release is skipped on pull requests; the image is still built (not pushed) as a check.
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.release.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
