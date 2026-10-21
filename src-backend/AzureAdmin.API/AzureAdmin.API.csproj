@@ -6,6 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    API contract + Angular client generation.
+    Every build runs the freshly built API with "export-openapi", which writes openapi/AzureAdmin.API.json
+    (repo root) from the Swashbuckle document without starting Kestrel, migrations, or background services.
+    ng-openapi-gen then regenerates the Angular client under src/app/api/generated from that file, so the
+    SPA never hand-writes URLs or DTOs. Both outputs are committed; CI fails if they drift from the controllers.
+    Pass -p:GenerateApiContract=false to skip (the Dockerfiles do; the image does not need it).
+  -->
+  <PropertyGroup>
+    <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '..', '..'))</RepoRoot>
+    <GenerateApiContract Condition="'$(GenerateApiContract)' == ''">true</GenerateApiContract>
+    <OpenApiContractFile>$(RepoRoot)openapi/AzureAdmin.API.json</OpenApiContractFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.7" />
@@ -18,5 +32,25 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
+
+  <Target Name="ExportOpenApiContract" AfterTargets="Build" Condition="'$(GenerateApiContract)' == 'true'">
+    <Exec Command="dotnet &quot;$(TargetPath)&quot; export-openapi &quot;$(OpenApiContractFile)&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- Skipped (with a warning) when the frontend dependencies are not installed, so a backend-only
+       checkout still builds. -->
+  <Target Name="GenerateAngularApiClient" AfterTargets="ExportOpenApiContract" Condition="'$(GenerateApiContract)' == 'true'">
+    <PropertyGroup>
+      <_NgOpenApiGenBin>$(RepoRoot)node_modules/.bin/ng-openapi-gen</_NgOpenApiGenBin>
+      <_NpmCommand>npm</_NpmCommand>
+      <_NpmCommand Condition="'$(OS)' == 'Windows_NT'">npm.cmd</_NpmCommand>
+    </PropertyGroup>
+    <Warning Condition="!Exists('$(_NgOpenApiGenBin)')"
+             Text="Angular API client not regenerated: run 'npm ci' at the repo root first (ng-openapi-gen missing)." />
+    <Exec Condition="Exists('$(_NgOpenApiGenBin)')"
+          Command="$(_NpmCommand) run --silent api:generate"
+          WorkingDirectory="$(RepoRoot)" />
+  </Target>
 
 </Project>

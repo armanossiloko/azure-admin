@@ -11,12 +11,20 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        // The API only speaks JSON. Declaring it keeps the OpenAPI contract to one media type per
+        // operation (no text/plain variants) so the generated client has one method per endpoint.
+        options.Filters.Add(new ProducesAttribute("application/json"));
+        options.Filters.Add(new ConsumesAttribute("application/json"));
+    })
     .AddJsonOptions(o =>
     {
         o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -34,7 +42,26 @@ builder.Services.AddProblemDetails(options =>
 });
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
-builder.Services.AddSwaggerGen();
+// The OpenAPI document is the contract for the generated Angular client (openapi/ at the repo root,
+// written on every build). Operation ids become the client method names, so they must be stable and
+// unique: "<Controller>_<Action>".
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo
+    {
+        Title = "Azure Admin API",
+        Version = "v1",
+        Description = "Release control for Azure DevOps: teams, repositories, promotion pull requests, and settings."
+    });
+    options.CustomOperationIds(api =>
+        api.ActionDescriptor is ControllerActionDescriptor action
+            ? $"{action.ControllerName}_{action.ActionName}"
+            : null);
+    options.SupportNonNullableReferenceTypes();
+    options.UseAllOfToExtendReferenceSchemas();
+    options.SchemaFilter<RequireNonNullablePropertiesSchemaFilter>();
+    options.OperationFilter<JsonOnlyRequestBodyOperationFilter>();
+});
 
 builder.Services.AddCors(options =>
 {
@@ -140,6 +167,10 @@ builder.Services.AddApplicationServices(builder.Configuration);
 
 var app = builder.Build();
 
+// Build-time contract export (see OpenApiExport): write the OpenAPI document and exit without starting.
+if (OpenApiExport.IsRequested(args))
+    return await OpenApiExport.RunAsync(args, app);
+
 app.UseExceptionHandler();
 
 using (var scope = app.Services.CreateScope())
@@ -193,3 +224,4 @@ app.MapHealthChecks("/health");
 app.MapFallbackToFile("index.html");
 
 app.Run();
+return 0;

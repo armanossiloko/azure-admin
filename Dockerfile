@@ -24,7 +24,7 @@ RUN dotnet restore AzureAdmin.API.csproj
 COPY src-backend/AzureAdmin.API/ .
 # Set by the release workflow (semantic-release); baked into the assembly version.
 ARG VERSION=0.0.0-dev
-RUN dotnet publish AzureAdmin.API.csproj -c Release -o /app/publish --no-restore -p:Version=${VERSION}
+RUN dotnet publish AzureAdmin.API.csproj -c Release -o /app/publish --no-restore -p:GenerateApiContract=false -p:Version=${VERSION}
 
 # --- Runtime -----------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

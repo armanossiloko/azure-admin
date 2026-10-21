@@ -7,7 +7,7 @@ COPY src-backend/AzureAdmin.API/AzureAdmin.API.csproj .
 RUN dotnet restore AzureAdmin.API.csproj
 
 COPY src-backend/AzureAdmin.API/ .
-RUN dotnet publish AzureAdmin.API.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish AzureAdmin.API.csproj -c Release -o /app/publish --no-restore -p:GenerateApiContract=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
