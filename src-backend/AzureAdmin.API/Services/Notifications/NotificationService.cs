@@ -128,7 +128,18 @@ public sealed class NotificationService
     /// Inserts an in-app notification once per <paramref name="dedupeKey"/> for the current user.
     /// Existing rows are left unchanged (no re-alert on repeat sync).
     /// </summary>
+    public Task NotifyOnceAsync(
+        string kind,
+        string dedupeKey,
+        string title,
+        string? body,
+        string? href,
+        CancellationToken cancellationToken) =>
+        NotifyOnceAsync(_currentUser.GetRequiredUserId(), kind, dedupeKey, title, body, href, cancellationToken);
+
+    /// <summary>Same as <see cref="NotifyOnceAsync(string,string,string,string?,string?,CancellationToken)"/> for an explicit user (background sync).</summary>
     public async Task NotifyOnceAsync(
+        Guid userId,
         string kind,
         string dedupeKey,
         string title,
@@ -136,7 +147,6 @@ public sealed class NotificationService
         string? href,
         CancellationToken cancellationToken)
     {
-        var userId = _currentUser.GetRequiredUserId();
         var exists = await _db.UserNotifications.AsNoTracking()
             .AnyAsync(n => n.UserId == userId && n.DedupeKey == dedupeKey, cancellationToken);
         if (exists)

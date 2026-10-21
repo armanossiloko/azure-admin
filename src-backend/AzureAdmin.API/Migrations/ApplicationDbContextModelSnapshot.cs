@@ -312,6 +312,9 @@ namespace AzureAdmin.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Phase")
                         .HasColumnType("integer");
 
@@ -350,6 +353,8 @@ namespace AzureAdmin.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("RegisteredRepositoryId");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("TeamId");
 

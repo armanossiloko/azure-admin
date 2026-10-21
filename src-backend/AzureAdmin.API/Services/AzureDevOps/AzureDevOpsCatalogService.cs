@@ -125,11 +125,12 @@ public sealed class AzureDevOpsCatalogService
 
     private async Task<string> GetJsonAsync(string pat, string url, CancellationToken cancellationToken)
     {
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = PatAuth(pat);
+        var http = _httpClientFactory.CreateClient(AzureDevOpsClient.ReadHttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = PatAuth(pat);
 
-        using var resp = await http.GetAsync(url, cancellationToken);
+        using var resp = await http.SendAsync(request, cancellationToken);
         var text = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode)
             throw new HttpRequestException($"Azure DevOps request failed ({(int)resp.StatusCode}): {text}");

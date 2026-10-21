@@ -120,6 +120,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
             e.Property(x => x.TargetRefName).HasMaxLength(512).IsRequired();
             e.Property(x => x.Title).HasMaxLength(1024).IsRequired();
             e.HasIndex(x => new { x.ReleaseId, x.RegisteredRepositoryId, x.Phase }).IsUnique();
+            e.HasIndex(x => x.Status);
             e.HasOne(x => x.Release)
                 .WithMany(x => x.PullRequests)
                 .HasForeignKey(x => x.ReleaseId)
