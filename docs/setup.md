@@ -123,6 +123,31 @@ npm install && npm start
 
 Or: `docker compose -f docker-compose.dev.yml --env-file .env.dev up --build`.
 
+## API contract and Angular client
+
+Building the API (`dotnet build`, `dotnet run`, `dotnet test`) runs two extra targets:
+
+1. `ExportOpenApiContract` runs the API in `export-openapi` mode (no Kestrel, no migrations, no
+   background services) and writes `openapi/AzureAdmin.API.json`. The file only changes when the
+   contract does, so rebuilds are no-ops for git.
+2. `GenerateAngularApiClient` runs `npm run api:generate` (ng-openapi-gen, configured in
+   `ng-openapi-gen.json`) and rewrites `src/app/api/generated/`. If `node_modules` is missing the
+   build warns instead of failing, so `npm ci` once before building the backend.
+
+Both outputs are committed. The CI test job rebuilds and fails on any diff under `openapi/` or
+`src/app/api/generated/`, so after changing a controller, DTO, or enum: build, review the generated
+diff, and commit it together with the backend change.
+
+Conventions on the Angular side:
+
+- Import from `src/app/api` (the barrel), never from `src/app/api/generated/...` directly.
+- Operation names are `<controller><Action>` on the controller's `*Api` service and return promises:
+  `teamsApi.teamsCreate({ body })`, `releasesApi.releasesGet({ id })`.
+- Enums are string unions with a matching value array (`ReleasePrPhase` / `RELEASE_PR_PHASE`) for
+  parsing user input.
+- Use `apiErrorMessage(error, fallback)` to surface the API's `message` / problem-details text.
+- Set `-p:GenerateApiContract=false` when building without npm (the Dockerfiles already do).
+
 ## Tests
 
 ```bash

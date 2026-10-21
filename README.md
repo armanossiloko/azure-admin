@@ -39,6 +39,8 @@ Tags: `latest`, semantic versions (`1.2.3`), and `sha-<short>` from CI. Helm cha
 ```text
 azure-admin/
 ├── package.json, angular.json, src/   # Angular SPA
+├── src/app/api/                       # API layer: generated client + error helpers
+├── openapi/AzureAdmin.API.json        # OpenAPI contract, written by the backend build
 ├── Dockerfile.backend                 # ASP.NET Core API
 ├── Dockerfile.frontend                # Angular SPA (nginx)
 ├── nginx.frontend.conf
@@ -75,6 +77,20 @@ Register **http://localhost:8080/signin-oidc** (and your logout redirect URL) in
 1. PostgreSQL running; configure `Postgres` (and `Keycloak`) for the API.
 2. API: `cd src-backend/AzureAdmin.API && dotnet run` (default **http://localhost:5063**).
 3. SPA: `npm install && npm start` from the repo root (**http://localhost:4200**, proxies `/api` to the API via `proxy.conf.json`).
+
+### API contract and generated client
+
+The Angular app does not hand-write HTTP calls. Every backend build exports the OpenAPI document to
+`openapi/AzureAdmin.API.json` and regenerates the typed client in `src/app/api/generated/`
+(one `*Api` service per controller plus the model types), so controllers are the single source of truth.
+
+- Change a controller or DTO → `dotnet build` the API → commit the regenerated `openapi/` and `src/app/api/generated/`.
+- `npm run api:generate` regenerates the client from the committed contract without building the backend.
+- `dotnet build -p:GenerateApiContract=false` skips the export (used by the Docker images, where no npm is available).
+- CI fails when the committed contract or client is stale.
+
+Components import from `src/app/api` (never from `generated/` directly) and use the promise-based
+`*Api` methods, for example `releasesApi.releasesGet({ id })`.
 
 Images (also built by Compose):
 

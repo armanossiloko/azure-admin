@@ -108,7 +108,7 @@ In-app notifications cover PAT expiry, PR merged (on manual or background status
 
 | Item | Notes |
 |------|--------|
-| OpenAPI client for Angular | Generated types instead of hand-rolled DTOs |
+| OpenAPI client for Angular | Done: the backend build exports `openapi/AzureAdmin.API.json` and regenerates `src/app/api/generated/`; CI checks for drift |
 | E2E tests | Playwright with ADO mock |
 | Local ADO mock | WireMock / recorded fixtures |
 | Feature flags | Jira, conventional commits, phases per env |
