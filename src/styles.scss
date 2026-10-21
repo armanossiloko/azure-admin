@@ -765,6 +765,7 @@ button { cursor: pointer; }
 .input.mono { font-family: var(--font-mono); font-size: 12.5px; }
 .textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+.select-sm { width: auto; height: 26px; padding: 0 28px 0 10px; font-size: 12px; border-radius: var(--r-2); background-position: right 8px center; }
 
 .checkbox, .radio {
   appearance: none;

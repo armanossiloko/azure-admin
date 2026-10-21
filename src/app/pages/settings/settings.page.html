@@ -341,7 +341,7 @@
           <ng-container *ngTemplateOutlet="webhookForm; context: { isNew: true }"></ng-container>
           <div style="display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; flex-wrap: wrap">
             <div style="display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; margin-right: auto">
-              <select class="select" style="width: auto; height: 30px; font-size: 12.5px" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
+              <select class="select select-sm" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
                 <option [ngValue]="false">Created sample</option>
                 <option [ngValue]="true">Merged sample</option>
               </select>
@@ -440,7 +440,7 @@
               </div>
               <div style="display: flex; gap: var(--s-2); justify-content: flex-end; align-items: center; flex-wrap: wrap">
                 <div style="display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; margin-right: auto">
-                  <select class="select" style="width: auto; height: 30px; font-size: 12.5px" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
+                  <select class="select select-sm" [(ngModel)]="webhookTestMerged" aria-label="Test message sample" title="Which sample message to send">
                     <option [ngValue]="false">Created sample</option>
                     <option [ngValue]="true">Merged sample</option>
                   </select>
