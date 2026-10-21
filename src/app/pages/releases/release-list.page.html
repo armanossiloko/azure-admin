@@ -78,7 +78,12 @@
                 <td>
                   <span [class]="statusBadgeClass(r.status)">{{ r.status }}</span>
                 </td>
-                <td class="muted">{{ r.createdAt | date: 'medium' }}</td>
+                <td class="muted">
+                  {{ r.createdAt | date: 'medium' }}
+                  @if (r.createdByName) {
+                    <div style="font-size: 12px">by {{ r.createdByName }}</div>
+                  }
+                </td>
                 <td class="actions" (click)="$event.stopPropagation()">
                   @if (!isReleaseClosed(r.status)) {
                     <a class="btn btn-sm" [routerLink]="['/releases', r.id, 'add-prs']">Add PRs</a>

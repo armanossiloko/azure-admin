@@ -1,10 +1,12 @@
 using System.Net.Http;
 using System.Security.Claims;
 using System.Text;
+using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AzureAdmin.API.Services.Webhooks;
 
@@ -16,15 +18,21 @@ public sealed class OutboundWebhookPublisher
     private readonly WebhookSubscriptionService _subscriptions;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IOptionsMonitor<AppOptions> _appOptions;
     private readonly ILogger<OutboundWebhookPublisher> _logger;
+
+    /// <summary>Shown as <c>{{actor}}</c> when a message is triggered by the background status sync.</summary>
+    internal const string BackgroundActor = "Automatic status sync";
 
     public OutboundWebhookPublisher(
         ApplicationDbContext db,
         WebhookSubscriptionService subscriptions,
         IHttpClientFactory httpClientFactory,
         IHttpContextAccessor httpContextAccessor,
+        IOptionsMonitor<AppOptions> appOptions,
         ILogger<OutboundWebhookPublisher> logger)
     {
+        _appOptions = appOptions;
         _db = db;
         _subscriptions = subscriptions;
         _httpClientFactory = httpClientFactory;
@@ -295,9 +303,19 @@ public sealed class OutboundWebhookPublisher
         return new WebhookPrLine(pr.Team.Name, name, pr.AzureDevOpsPullRequestId, pr.Url);
     }
 
-    private string? TryGetReleaseUrl(Guid releaseId)
+    private string? TryGetReleaseUrl(Guid releaseId) =>
+        BuildReleaseUrl(_appOptions.CurrentValue.PublicBaseUrl, _httpContextAccessor.HttpContext, releaseId);
+
+    /// <summary>
+    /// Link to the release page: the configured public base URL when set (also works without a request, e.g.
+    /// the background status sync), otherwise derived from the current request; null when neither exists.
+    /// </summary>
+    internal static string? BuildReleaseUrl(string? publicBaseUrl, HttpContext? http, Guid releaseId)
     {
-        var http = _httpContextAccessor.HttpContext;
+        if (Uri.TryCreate(publicBaseUrl?.Trim(), UriKind.Absolute, out var configured) &&
+            (configured.Scheme == Uri.UriSchemeHttps || configured.Scheme == Uri.UriSchemeHttp))
+            return $"{configured.GetLeftPart(UriPartial.Path).TrimEnd('/')}/releases/{releaseId}";
+
         if (http is null)
             return null;
 
@@ -313,9 +331,11 @@ public sealed class OutboundWebhookPublisher
 
     private string? TryGetActor()
     {
-        var user = _httpContextAccessor.HttpContext?.User;
-        if (user is null)
-            return null;
+        var http = _httpContextAccessor.HttpContext;
+        if (http is null)
+            return BackgroundActor;
+
+        var user = http.User;
         return user.FindFirstValue("displayName")
             ?? user.FindFirstValue(ClaimTypes.Email)
             ?? user.FindFirstValue(ClaimTypes.Name);

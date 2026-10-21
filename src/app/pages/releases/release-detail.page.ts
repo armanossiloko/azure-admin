@@ -1,98 +1,23 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { firstValueFrom } from 'rxjs';
+import {
+  RELEASE_LIFECYCLE_STATUS,
+  ReleaseCommitItemDto,
+  ReleaseDetailDto,
+  ReleaseLifecycleStatus,
+  ReleasePrPhase,
+  ReleasePullRequestDto,
+  ReleaseRepositoryCommitNotesDto,
+  ReleasesApi,
+  UpdateReleaseRequest,
+  apiErrorMessage,
+  apiErrorStatus
+} from '../../api';
 
 type PhaseBucketKey = 'dev' | 'prod' | 'backmerge';
-
-type ReleaseTeam = { id: string; teamId: string; teamName: string };
-
-type ReleasePullRequest = {
-  id: string;
-  teamId: string;
-  teamName: string;
-  registeredRepositoryId: string;
-  serviceName: string | null;
-  repositoryIdOrName: string;
-  phase: string | number;
-  status: string;
-  azureDevOpsPullRequestId: number;
-  url: string;
-  sourceRefName: string;
-  targetRefName: string;
-  title: string;
-  createdAt: string;
-};
-
-type CompletedPullRequestResult = {
-  repositoryIdOrName: string;
-  pullRequestId: number;
-  success: boolean;
-  message: string | null;
-};
-
-type CompleteBatchResponse = {
-  results: CompletedPullRequestResult[];
-};
-
-type PullRequestStatusResult = { pullRequestId: string; status: string };
-
-type StatusRefreshResponse = {
-  results: PullRequestStatusResult[];
-};
-
-type ReleaseCommitItem = {
-  commitId: string;
-  comment: string;
-  authorName: string;
-  committedDate: string;
-};
-
-type JiraTicketRef = { key: string; url: string };
-
-type EnrichedCommitItem = {
-  commitId: string;
-  authorName: string;
-  committedDate: string;
-  rawComment: string;
-  conventionalType: string | null;
-  scope: string | null;
-  description: string;
-  isBreaking: boolean;
-  jiraReferences: JiraTicketRef[];
-};
-
-type CommitGroup = {
-  groupName: string;
-  isBreaking: boolean;
-  commits: EnrichedCommitItem[];
-};
-
-type ReleaseRepositoryCommitNotes = {
-  registeredRepositoryId: string;
-  serviceName: string | null;
-  repositoryIdOrName: string;
-  phase: string | number;
-  sourceRefName: string;
-  targetRefName: string;
-  fetchedAt: string;
-  commits: ReleaseCommitItem[];
-  commitGroups?: CommitGroup[] | null;
-};
-
-type ReleaseDetail = {
-  id: string;
-  title: string;
-  sprintLabel: string | null;
-  status: string;
-  createdAt: string;
-  teams: ReleaseTeam[];
-  pullRequests: ReleasePullRequest[];
-  repositoryCommitNotes?: ReleaseRepositoryCommitNotes[];
-};
 
 @Component({
   standalone: true,
@@ -120,7 +45,7 @@ export class ReleaseDetailPage implements OnInit {
     { key: 'prod', title: 'Master → Prod' }
   ];
 
-  protected readonly release = signal<ReleaseDetail | null>(null);
+  protected readonly release = signal<ReleaseDetailDto | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly notesBusy = signal(false);
   protected readonly notesMessage = signal<string | null>(null);
@@ -133,18 +58,18 @@ export class ReleaseDetailPage implements OnInit {
   protected readonly editingMeta = signal(false);
   protected readonly editTitle = signal('');
   protected readonly editSprint = signal('');
-  protected readonly editStatus = signal('Draft');
+  protected readonly editStatus = signal<ReleaseLifecycleStatus>('Draft');
+  /** Concurrency stamp of the release as it was when the edit form opened. */
+  private editStamp: string | null = null;
   protected readonly collapsedPhases = signal<ReadonlySet<PhaseBucketKey>>(new Set());
   protected readonly collapsedNotePhases = signal<ReadonlySet<PhaseBucketKey>>(new Set(['dev', 'prod']));
   protected readonly previewOpen = signal(false);
   protected readonly previewHtml = signal<SafeHtml>('');
 
-  constructor(
-    private readonly route: ActivatedRoute,
-    private readonly router: Router,
-    private readonly http: HttpClient,
-    private readonly sanitizer: DomSanitizer
-  ) {}
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly releasesApi = inject(ReleasesApi);
+  private readonly sanitizer = inject(DomSanitizer);
 
   async ngOnInit(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
@@ -162,12 +87,8 @@ export class ReleaseDetailPage implements OnInit {
   protected async loadRelease(id: string, options?: { syncStatuses?: boolean }): Promise<void> {
     this.error.set(null);
     try {
-      const data = await firstValueFrom(this.http.get<ReleaseDetail>(`/api/releases/${id}`));
-      data.repositoryCommitNotes = (data.repositoryCommitNotes ?? []).map((n) => ({
-        ...n,
-        commits: n.commits ?? []
-      }));
-      this.release.set(data);
+      const data = await this.releasesApi.releasesGet({ id });
+      this.release.set(this.normalize(data));
 
       if (options?.syncStatuses !== false && data.pullRequests.length > 0 && !this.isReleaseClosed(data.status)) {
         void this.syncPrStatusesQuietly(id);
@@ -181,20 +102,23 @@ export class ReleaseDetailPage implements OnInit {
   /** Background ADO status sync after opening a release; failures stay silent. */
   private async syncPrStatusesQuietly(releaseId: string): Promise<void> {
     try {
-      await firstValueFrom(
-        this.http.post<StatusRefreshResponse>(`/api/releases/${releaseId}/pull-requests/status-refresh`, {})
-      );
-      const data = await firstValueFrom(this.http.get<ReleaseDetail>(`/api/releases/${releaseId}`));
-      data.repositoryCommitNotes = (data.repositoryCommitNotes ?? []).map((n) => ({
-        ...n,
-        commits: n.commits ?? []
-      }));
+      await this.releasesApi.releasesRefreshPullRequestStatuses({ releaseId, body: {} });
+      const data = await this.releasesApi.releasesGet({ id: releaseId });
       if (this.release()?.id === releaseId) {
-        this.release.set(data);
+        this.release.set(this.normalize(data));
       }
     } catch {
       // Keep last known statuses; user can still click Check status.
     }
+  }
+
+  /** Older backends omit the commit-notes arrays; make them safe to iterate. */
+  private normalize(data: ReleaseDetailDto): ReleaseDetailDto {
+    return {
+      ...data,
+      pullRequests: data.pullRequests ?? [],
+      repositoryCommitNotes: (data.repositoryCommitNotes ?? []).map((n) => ({ ...n, commits: n.commits ?? [] }))
+    };
   }
 
   protected async refreshNotes(): Promise<void> {
@@ -204,7 +128,7 @@ export class ReleaseDetailPage implements OnInit {
     this.notesMessage.set(null);
     this.error.set(null);
     try {
-      await firstValueFrom(this.http.post(`/api/releases/${rel.id}/commit-notes/refresh`, {}));
+      await this.releasesApi.releasesRefreshCommitNotes({ releaseId: rel.id });
       await this.loadRelease(rel.id);
       this.notesMessage.set('Commit notes refreshed.');
     } catch {
@@ -270,11 +194,14 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, { status: 'Active' }));
+      await this.releasesApi.releasesUpdate({
+        id: rel.id,
+        body: { status: 'Active', concurrencyStamp: rel.concurrencyStamp }
+      });
       await this.loadRelease(rel.id);
       this.copyMessage.set('Release marked Active.');
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }
@@ -286,6 +213,7 @@ export class ReleaseDetailPage implements OnInit {
     this.editTitle.set(rel.title);
     this.editSprint.set(rel.sprintLabel ?? '');
     this.editStatus.set(rel.status || 'Draft');
+    this.editStamp = rel.concurrencyStamp ?? null;
     this.editingMeta.set(true);
   }
 
@@ -293,8 +221,13 @@ export class ReleaseDetailPage implements OnInit {
     this.editingMeta.set(false);
   }
 
+  protected setEditStatus(value: string): void {
+    const parsed = RELEASE_LIFECYCLE_STATUS.find((s) => s === value);
+    if (parsed) this.editStatus.set(parsed);
+  }
+
   /** Status values the current release may transition to (including no-op). */
-  protected editableStatusOptions(current: string): string[] {
+  protected editableStatusOptions(current: string): ReleaseLifecycleStatus[] {
     const c = (current || 'Draft').toLowerCase();
     if (c === 'draft') return ['Draft', 'Active', 'Completed', 'Archived'];
     if (c === 'active') return ['Active', 'Completed', 'Archived'];
@@ -314,21 +247,27 @@ export class ReleaseDetailPage implements OnInit {
     this.savingMeta.set(true);
     this.error.set(null);
     try {
-      const body: Record<string, string> = {
+      const body: UpdateReleaseRequest = {
         title,
-        sprintLabel: this.editSprint().trim()
+        sprintLabel: this.editSprint().trim(),
+        concurrencyStamp: this.editStamp
       };
-      const nextStatus = this.editStatus().trim();
-      if (nextStatus && nextStatus.toLowerCase() !== (rel.status || '').toLowerCase()) {
-        body['status'] = nextStatus;
-      }
+      const nextStatus = this.editStatus();
+      if (nextStatus !== rel.status) body.status = nextStatus;
 
-      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, body));
+      await this.releasesApi.releasesUpdate({ id: rel.id, body });
       this.editingMeta.set(false);
       await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release details updated.');
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      if ((await this.reportUpdateError(e, rel.id)) && this.release()) {
+        // Their version is now in the form (title, sprint, and a status that is still a valid choice);
+        // the user reapplies their change on top of it and saves again.
+        this.startEditMeta();
+        this.error.set(
+          'Someone else changed this release while you were editing. The form now shows their version; reapply your changes and save again.'
+        );
+      }
     } finally {
       this.savingMeta.set(false);
     }
@@ -342,17 +281,34 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.http.patch(`/api/releases/${rel.id}`, { status: 'Archived' }));
+      await this.releasesApi.releasesUpdate({
+        id: rel.id,
+        body: { status: 'Archived', concurrencyStamp: rel.concurrencyStamp }
+      });
       await this.loadRelease(rel.id);
       this.copyMessage.set('Release archived.');
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }
   }
 
-  protected async removePullRequest(pr: ReleasePullRequest): Promise<void> {
+  /**
+   * Shows why an edit failed. A 409 means someone else changed the release since it was loaded: reload it so
+   * the page shows their change, and say so. Returns true for that conflict case.
+   */
+  private async reportUpdateError(e: unknown, releaseId: string): Promise<boolean> {
+    if (apiErrorStatus(e) !== 409) {
+      this.error.set(apiErrorMessage(e));
+      return false;
+    }
+    await this.loadRelease(releaseId, { syncStatuses: false });
+    this.error.set('Someone else changed this release while you had it open. The page now shows their changes; review them and try again.');
+    return true;
+  }
+
+  protected async removePullRequest(pr: ReleasePullRequestDto): Promise<void> {
     const rel = this.release();
     if (!rel) return;
     const label = this.repoDisplay(pr);
@@ -363,11 +319,11 @@ export class ReleaseDetailPage implements OnInit {
     this.removingPrId.set(pr.id);
     this.error.set(null);
     try {
-      await firstValueFrom(this.http.delete(`/api/releases/${rel.id}/pull-requests/${pr.id}`));
+      await this.releasesApi.releasesRemovePullRequest({ releaseId: rel.id, pullRequestId: pr.id });
       await this.loadRelease(rel.id);
       this.copyMessage.set(`Removed PR #${pr.azureDevOpsPullRequestId} from the release.`);
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.removingPrId.set(null);
     }
@@ -381,11 +337,12 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.http.post(`/api/releases/${rel.id}/close`, {}));
-      this.release.update((r) => (r ? { ...r, status: 'Completed' } : r));
+      await this.releasesApi.releasesClose({ id: rel.id, concurrencyStamp: rel.concurrencyStamp ?? undefined });
+      // Reload rather than patching the status locally: closing rotates the concurrency stamp.
+      await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release closed.');
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }
@@ -412,52 +369,64 @@ export class ReleaseDetailPage implements OnInit {
     this.error.set(null);
     this.copyMessage.set(null);
     try {
-      const phase = this.phaseApiName(phaseKey);
-      await firstValueFrom(
-        this.http.post<StatusRefreshResponse>(`/api/releases/${rel.id}/pull-requests/status-refresh`, { phase })
-      );
+      await this.releasesApi.releasesRefreshPullRequestStatuses({
+        releaseId: rel.id,
+        body: { phase: this.phaseApiName(phaseKey) }
+      });
       await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('PR statuses updated from Azure DevOps.');
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.checkingStatusPhase.set(null);
     }
   }
 
-  protected repoDisplay(pr: ReleasePullRequest): string {
+  protected repoDisplay(pr: ReleasePullRequestDto): string {
     return pr.serviceName?.trim() || pr.repositoryIdOrName;
   }
 
-  protected repoDisplayNotes(block: ReleaseRepositoryCommitNotes): string {
+  protected repoDisplayNotes(block: ReleaseRepositoryCommitNotesDto): string {
     return block.serviceName?.trim() || block.repositoryIdOrName;
   }
 
-  protected phaseLabel(phase: string | number): string {
-    if (phase === 'DevToMaster' || phase === 0 || phase === '0') return 'Dev → Master';
-    if (phase === 'MasterToProd' || phase === 1 || phase === '1') return 'Master → Prod';
-    if (phase === 'ProdToDev' || phase === 2 || phase === '2') return 'Prod → Dev';
-    return String(phase);
+  protected phaseLabel(phase: ReleasePrPhase): string {
+    switch (phase) {
+      case 'DevToMaster':
+        return 'Dev → Master';
+      case 'MasterToProd':
+        return 'Master → Prod';
+      case 'ProdToDev':
+        return 'Prod → Dev';
+      default:
+        return String(phase);
+    }
   }
 
-  /** Buckets API enum / JSON numeric phase for grouping in the UI. */
-  protected phaseBucket(phase: string | number): PhaseBucketKey | 'other' {
-    if (phase === 'DevToMaster' || phase === 0 || phase === '0') return 'dev';
-    if (phase === 'MasterToProd' || phase === 1 || phase === '1') return 'prod';
-    if (phase === 'ProdToDev' || phase === 2 || phase === '2') return 'backmerge';
-    return 'other';
+  /** Buckets the API phase for grouping in the UI. */
+  protected phaseBucket(phase: ReleasePrPhase): PhaseBucketKey | 'other' {
+    switch (phase) {
+      case 'DevToMaster':
+        return 'dev';
+      case 'MasterToProd':
+        return 'prod';
+      case 'ProdToDev':
+        return 'backmerge';
+      default:
+        return 'other';
+    }
   }
 
-  private phaseApiName(phaseKey: PhaseBucketKey): 'DevToMaster' | 'MasterToProd' | 'ProdToDev' {
+  private phaseApiName(phaseKey: PhaseBucketKey): ReleasePrPhase {
     if (phaseKey === 'prod') return 'MasterToProd';
     if (phaseKey === 'backmerge') return 'ProdToDev';
     return 'DevToMaster';
   }
 
   protected pullRequestsInPhase(
-    prs: ReleasePullRequest[],
+    prs: ReleasePullRequestDto[],
     bucket: PhaseBucketKey | 'other'
-  ): ReleasePullRequest[] {
+  ): ReleasePullRequestDto[] {
     return prs
       .filter((p) => this.phaseBucket(p.phase) === bucket)
       .sort((a, b) => {
@@ -468,24 +437,24 @@ export class ReleaseDetailPage implements OnInit {
   }
 
   protected commitNotesInPhase(
-    notes: ReleaseRepositoryCommitNotes[] | undefined,
+    notes: ReleaseRepositoryCommitNotesDto[] | undefined,
     bucket: PhaseBucketKey | 'other'
-  ): ReleaseRepositoryCommitNotes[] {
+  ): ReleaseRepositoryCommitNotesDto[] {
     if (!notes?.length) return [];
     return notes
       .filter((b) => this.phaseBucket(b.phase) === bucket)
       .sort((a, b) => this.repoDisplayNotes(a).localeCompare(this.repoDisplayNotes(b)));
   }
 
-  protected commitBlockTrackKey(block: ReleaseRepositoryCommitNotes): string {
+  protected commitBlockTrackKey(block: ReleaseRepositoryCommitNotesDto): string {
     return `${block.registeredRepositoryId}:${String(block.phase)}:${block.sourceRefName}:${block.targetRefName}`;
   }
 
-  protected commitsForBlock(block: ReleaseRepositoryCommitNotes): ReleaseCommitItem[] {
+  protected commitsForBlock(block: ReleaseRepositoryCommitNotesDto): ReleaseCommitItemDto[] {
     return block.commits ?? [];
   }
 
-  protected hasCommits(block: ReleaseRepositoryCommitNotes): boolean {
+  protected hasCommits(block: ReleaseRepositoryCommitNotesDto): boolean {
     return this.commitsForBlock(block).length > 0;
   }
 
@@ -516,9 +485,9 @@ export class ReleaseDetailPage implements OnInit {
 
   /** PRs that can still be opened or merged (skip Completed / Abandoned). */
   protected mergeablePullRequestsInPhase(
-    prs: ReleasePullRequest[],
+    prs: ReleasePullRequestDto[],
     bucket: PhaseBucketKey | 'other'
-  ): ReleasePullRequest[] {
+  ): ReleasePullRequestDto[] {
     return this.pullRequestsInPhase(prs, bucket).filter(
       (p) => p.status === 'Active' || p.status === 'Unknown'
     );
@@ -582,10 +551,10 @@ export class ReleaseDetailPage implements OnInit {
     this.error.set(null);
     this.copyMessage.set(null);
     try {
-      const phase = this.phaseApiName(phaseKey);
-      const resp = await firstValueFrom(
-        this.http.post<CompleteBatchResponse>(`/api/releases/${rel.id}/pull-requests/complete-batch`, { phase })
-      );
+      const resp = await this.releasesApi.releasesCompletePullRequestsBatch({
+        releaseId: rel.id,
+        body: { phase: this.phaseApiName(phaseKey) }
+      });
       const results = resp?.results ?? [];
       const failed = results.filter((r) => !r.success);
       const succeeded = results.filter((r) => r.success);
@@ -599,28 +568,14 @@ export class ReleaseDetailPage implements OnInit {
         this.copyMessage.set(`Completed all ${succeeded.length} PR${succeeded.length === 1 ? '' : 's'} in ${phaseTitle}.`);
       }
     } catch (e: unknown) {
-      this.error.set(this.prettyError(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.completingPhase.set(null);
     }
   }
 
-  private prettyError(e: unknown): string {
-    const http = e as { error?: unknown; message?: string };
-    const body = http?.error;
-    const nested =
-      typeof body === 'object' && body !== null && 'message' in body
-        ? String((body as { message: unknown }).message)
-        : null;
-    return (
-      nested ??
-      (typeof body === 'string' ? body : null) ??
-      http?.message ??
-      'Request failed. Check backend logs for details.'
-    );
-  }
 
-  protected async copyMarkdown(scope: 'all' | 'phase' | 'repo', phaseKey?: PhaseBucketKey, block?: ReleaseRepositoryCommitNotes): Promise<void> {
+  protected async copyMarkdown(scope: 'all' | 'phase' | 'repo', phaseKey?: PhaseBucketKey, block?: ReleaseRepositoryCommitNotesDto): Promise<void> {
     const rel = this.release();
     if (!rel) return;
 
@@ -648,7 +603,7 @@ export class ReleaseDetailPage implements OnInit {
     }
   }
 
-  private allNotesToMarkdown(rel: ReleaseDetail): string {
+  private allNotesToMarkdown(rel: ReleaseDetailDto): string {
     const lines: string[] = [`# Release notes: ${rel.title}`, ''];
     if (rel.sprintLabel) lines.push(`Sprint: ${rel.sprintLabel}`, '');
 
@@ -669,7 +624,7 @@ export class ReleaseDetailPage implements OnInit {
   private phaseToMarkdown(
     releaseTitle: string,
     phaseTitle: string,
-    blocks: ReleaseRepositoryCommitNotes[],
+    blocks: ReleaseRepositoryCommitNotesDto[],
     includeReleaseHeading = true
   ): string {
     const lines: string[] = [];
@@ -685,7 +640,7 @@ export class ReleaseDetailPage implements OnInit {
     return lines.join('\n').trim();
   }
 
-  private blockToMarkdown(_releaseTitle: string, block: ReleaseRepositoryCommitNotes): string {
+  private blockToMarkdown(_releaseTitle: string, block: ReleaseRepositoryCommitNotesDto): string {
     const lines: string[] = [];
     const repo = this.repoDisplayNotes(block);
 

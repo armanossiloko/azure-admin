@@ -2,6 +2,7 @@ using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
 using AzureAdmin.API.Services.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace AzureAdmin.API.Services.Notifications;
 
@@ -128,7 +129,18 @@ public sealed class NotificationService
     /// Inserts an in-app notification once per <paramref name="dedupeKey"/> for the current user.
     /// Existing rows are left unchanged (no re-alert on repeat sync).
     /// </summary>
+    public Task NotifyOnceAsync(
+        string kind,
+        string dedupeKey,
+        string title,
+        string? body,
+        string? href,
+        CancellationToken cancellationToken) =>
+        NotifyOnceAsync(_currentUser.GetRequiredUserId(), kind, dedupeKey, title, body, href, cancellationToken);
+
+    /// <summary>Same as <see cref="NotifyOnceAsync(string,string,string,string?,string?,CancellationToken)"/> for an explicit user (background sync).</summary>
     public async Task NotifyOnceAsync(
+        Guid userId,
         string kind,
         string dedupeKey,
         string title,
@@ -136,13 +148,12 @@ public sealed class NotificationService
         string? href,
         CancellationToken cancellationToken)
     {
-        var userId = _currentUser.GetRequiredUserId();
         var exists = await _db.UserNotifications.AsNoTracking()
             .AnyAsync(n => n.UserId == userId && n.DedupeKey == dedupeKey, cancellationToken);
         if (exists)
             return;
 
-        _db.UserNotifications.Add(new UserNotification
+        var entry = _db.UserNotifications.Add(new UserNotification
         {
             Id = Guid.NewGuid(),
             UserId = userId,
@@ -153,6 +164,25 @@ public sealed class NotificationService
             Href = href,
             CreatedAt = DateTimeOffset.UtcNow
         });
-        await _db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Never leave the failed row tracked: the caller's next SaveChanges (status updates, release
+            // promotion) would retry the same insert and fail too.
+            entry.State = EntityState.Detached;
+
+            // Lost the check-then-insert race (background sync and a manual refresh, or two refreshes):
+            // the unique (UserId, DedupeKey) index means the notification already exists.
+            if (IsUniqueViolation(ex))
+                return;
+            throw;
+        }
     }
+
+    internal static bool IsUniqueViolation(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 }

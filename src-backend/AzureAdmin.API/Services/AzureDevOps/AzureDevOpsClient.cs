@@ -9,18 +9,37 @@ namespace AzureAdmin.API.Services.AzureDevOps;
 
 public sealed class AzureDevOpsClient
 {
+    /// <summary>
+    /// Named client for idempotent reads (GET). Wrapped in the standard resilience pipeline:
+    /// retries with backoff on 5xx/408/429 (honouring <c>Retry-After</c>), per-attempt and total timeouts,
+    /// and a circuit breaker. Safe to retry because a repeated GET has no side effects.
+    /// </summary>
+    public const string ReadHttpClientName = "AzureDevOps.Read";
+
+    /// <summary>
+    /// Named client for writes (create PR, complete PR, delete ref). Only retried on 429/503, where
+    /// Azure DevOps guarantees the request was not processed; a blind retry on other failures could
+    /// open a duplicate pull request.
+    /// </summary>
+    public const string WriteHttpClientName = "AzureDevOps.Write";
+
+    private static readonly JsonSerializerOptions CaseInsensitive = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AzureDevOpsOptions _options;
     private readonly IAzureDevOpsPatResolver _patResolver;
+    private readonly ILogger<AzureDevOpsClient> _logger;
 
     public AzureDevOpsClient(
         IHttpClientFactory httpClientFactory,
         IOptions<AzureDevOpsOptions> options,
-        IAzureDevOpsPatResolver patResolver)
+        IAzureDevOpsPatResolver patResolver,
+        ILogger<AzureDevOpsClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _patResolver = patResolver;
+        _logger = logger;
     }
 
     public async Task<AzureDevOpsCreatePullRequestResponse> CreatePullRequestAsync(
@@ -40,8 +59,7 @@ public sealed class AzureDevOpsClient
         sourceRefName = NormalizeRefName(sourceRefName);
         targetRefName = NormalizeRefName(targetRefName);
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, "pullrequests");
 
         var body = new
         {
@@ -51,25 +69,18 @@ public sealed class AzureDevOpsClient
             description
         };
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        using var resp = await http.PostAsync(url, content, ct);
+        using var resp = await SendAsync(WriteHttpClientName, HttpMethod.Post, url, pat, body, ct);
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps PR create failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("PR create", resp, respText, _logger);
 
-        var parsed = JsonSerializer.Deserialize<AzureDevOpsCreatePullRequestResponse>(
-            respText,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var parsed = JsonSerializer.Deserialize<AzureDevOpsCreatePullRequestResponse>(respText, CaseInsensitive);
 
         if (parsed is null)
             throw new InvalidOperationException("Azure DevOps response could not be parsed.");
 
-        // The response doesn't directly include a browser URL; construct one.
+        // The response does not include a browser URL; construct one.
         var prUrl =
             $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_git/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequest/{parsed.PullRequestId}";
 
@@ -89,21 +100,30 @@ public sealed class AzureDevOpsClient
         CancellationToken ct)
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+        return await TryGetGitPullRequestStatusAsync(pat, organization, project, repositoryIdOrName, pullRequestId, ct);
+    }
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+    /// <summary>
+    /// Same as the <see cref="Guid"/> overload but takes an already-resolved PAT, for callers that fan out
+    /// many lookups concurrently and must not hit the PAT resolver (and its DbContext) in parallel.
+    /// </summary>
+    public async Task<string?> TryGetGitPullRequestStatusAsync(
+        string pat,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        int pullRequestId,
+        CancellationToken ct)
+    {
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, $"pullrequests/{pullRequestId}");
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var resp = await http.GetAsync(url, ct);
+        using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return null;
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get PR failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get PR", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -130,12 +150,7 @@ public sealed class AzureDevOpsClient
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
 
-        var qs =
-            $"api-version={Uri.EscapeDataString(_options.ApiVersion)}" +
-            $"&$top={top}";
-
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}/commits?{qs}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, $"pullrequests/{pullRequestId}/commits", $"$top={top}");
 
         return await GetCommitListFromUrlAsync(pat, url, ct);
     }
@@ -173,15 +188,13 @@ public sealed class AzureDevOpsClient
         CancellationToken ct)
     {
         var qs =
-            $"api-version={Uri.EscapeDataString(_options.ApiVersion)}" +
-            $"&$top={top}" +
+            $"$top={top}" +
             $"&searchCriteria.itemVersion.version={Uri.EscapeDataString(itemBranch)}" +
             "&searchCriteria.itemVersion.versionType=branch" +
             $"&searchCriteria.compareVersion.version={Uri.EscapeDataString(compareBranch)}" +
             "&searchCriteria.compareVersion.versionType=branch";
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/commits?{qs}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, "commits", qs);
 
         return await GetCommitListFromUrlAsync(pat, url, ct);
     }
@@ -191,27 +204,16 @@ public sealed class AzureDevOpsClient
         string url,
         CancellationToken ct)
     {
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var resp = await http.GetAsync(url, ct);
+        using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps commits failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("commits", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         if (!doc.RootElement.TryGetProperty("value", out var arr) || arr.ValueKind != JsonValueKind.Array)
             return Array.Empty<AzureDevOpsCommitBrief>();
 
         return GitCommitJsonParser.ParseCommitArray(arr);
-    }
-
-    private static AuthenticationHeaderValue CreatePatAuthHeader(string pat)
-    {
-        // Basic auth: username can be empty; PAT is the password.
-        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
-        return new AuthenticationHeaderValue("Basic", token);
     }
 
     /// <summary>Fetches PR status, merge status and the source commit needed to complete the PR.</summary>
@@ -225,20 +227,15 @@ public sealed class AzureDevOpsClient
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, $"pullrequests/{pullRequestId}");
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var resp = await http.GetAsync(url, ct);
+        using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return null;
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get PR failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get PR", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -272,8 +269,7 @@ public sealed class AzureDevOpsClient
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequests/{pullRequestId}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, $"pullrequests/{pullRequestId}");
 
         var body = new
         {
@@ -287,16 +283,11 @@ public sealed class AzureDevOpsClient
             }
         };
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        using var resp = await http.PatchAsync(url, content, ct);
+        using var resp = await SendAsync(WriteHttpClientName, HttpMethod.Patch, url, pat, body, ct);
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps PR complete failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("PR complete", resp, respText, _logger);
     }
 
     public async Task<IReadOnlyList<AzureDevOpsGitRef>> ListBranchRefsAsync(
@@ -313,21 +304,15 @@ public sealed class AzureDevOpsClient
         do
         {
             var qs =
-                $"filter=heads/" +
-                $"&api-version={Uri.EscapeDataString(_options.ApiVersion)}" +
+                "filter=heads/" +
                 (continuationToken is null ? "" : $"&continuationToken={Uri.EscapeDataString(continuationToken)}");
 
-            var url =
-                $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/refs?{qs}";
+            var url = RepoApiUrl(organization, project, repositoryIdOrName, "refs", qs);
 
-            var http = _httpClientFactory.CreateClient();
-            http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-            using var resp = await http.GetAsync(url, ct);
+            using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
             var text = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"Azure DevOps list refs failed ({(int)resp.StatusCode}): {text}");
+                throw AzureDevOpsHttp.Failure("list refs", resp, text, _logger);
 
             using var doc = JsonDocument.Parse(text);
             var root = doc.RootElement;
@@ -381,20 +366,15 @@ public sealed class AzureDevOpsClient
         string commitId,
         CancellationToken ct)
     {
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/commits/{Uri.EscapeDataString(commitId)}?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, $"commits/{Uri.EscapeDataString(commitId)}");
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var resp = await http.GetAsync(url, ct);
+        using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return null;
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get commit failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get commit", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -425,8 +405,7 @@ public sealed class AzureDevOpsClient
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
         refName = NormalizeRefName(refName);
 
-        var url =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/refs?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, "refs");
 
         var body = new[]
         {
@@ -438,16 +417,49 @@ public sealed class AzureDevOpsClient
             }
         };
 
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = CreatePatAuthHeader(pat);
-
-        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        using var resp = await http.PostAsync(url, content, ct);
+        using var resp = await SendAsync(WriteHttpClientName, HttpMethod.Post, url, pat, body, ct);
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps delete branch failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("delete branch", resp, respText, _logger);
+    }
+
+    /// <summary>
+    /// Sends one request through the named client. Auth and Accept headers are set per request (not on the
+    /// client) so the pooled handler and its resilience pipeline are shared across users. Timeouts and an open
+    /// circuit come back as <see cref="HttpRequestException"/> (see <see cref="AzureDevOpsHttp.SendAsync"/>).
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(
+        string clientName,
+        HttpMethod method,
+        string url,
+        string pat,
+        object? body,
+        CancellationToken ct)
+    {
+        var http = _httpClientFactory.CreateClient(clientName);
+        using var request = new HttpRequestMessage(method, url);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = CreatePatAuthHeader(pat);
+        if (body is not null)
+            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        return await AzureDevOpsHttp.SendAsync(http, request, ct);
+    }
+
+    private string RepoApiUrl(string organization, string project, string repositoryIdOrName, string path, string? query = null)
+    {
+        var url =
+            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryIdOrName)}/{path}" +
+            $"?api-version={Uri.EscapeDataString(_options.ApiVersion)}";
+        return string.IsNullOrEmpty(query) ? url : $"{url}&{query}";
+    }
+
+    internal static AuthenticationHeaderValue CreatePatAuthHeader(string pat)
+    {
+        // Basic auth: username can be empty; PAT is the password.
+        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
+        return new AuthenticationHeaderValue("Basic", token);
     }
 
     public static string BranchShortName(string refName)

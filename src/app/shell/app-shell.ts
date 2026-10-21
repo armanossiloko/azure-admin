@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import {
   Component,
   ElementRef,
@@ -11,56 +10,22 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
-import { firstValueFrom } from 'rxjs';
+import { debounceTime, distinctUntilChanged, from, of, Subject, switchMap } from 'rxjs';
+import {
+  AccountSettingsApi,
+  NavigationApi,
+  NavigationOrganizationDto,
+  NavigationSummaryDto,
+  NotificationDto,
+  NotificationsApi,
+  SearchApi,
+  SearchHitDto,
+  SearchResultDto
+} from '../api';
 import { AuthService } from '../auth/auth.service';
 import { BrandingService } from '../services/branding.service';
 import { SelectedOrgService } from '../services/selected-org.service';
 import { ThemeService, type ThemeId, parseThemeId } from '../theme/theme.service';
-
-type DashboardActivityItem = {
-  kind: string;
-  title: string;
-  subtitle: string | null;
-  occurredAt: string;
-  href: string | null;
-};
-
-type NavigationOrganization = {
-  id: string;
-  displayName: string;
-  organizationKey: string;
-  hasPatCredential: boolean;
-};
-
-type NavigationSummary = {
-  organizations: NavigationOrganization[];
-  activityPreview: DashboardActivityItem[];
-  unreadNotificationsCount: number;
-  appVersion: string;
-};
-
-type NotificationItem = {
-  id: string;
-  kind: string;
-  title: string;
-  body: string | null;
-  href: string | null;
-  createdAt: string;
-  isRead: boolean;
-};
-
-type SearchHit = {
-  kind: string;
-  title: string;
-  subtitle: string | null;
-  href: string;
-};
-
-type AccountSettings = {
-  defaultOrganizationId: string | null;
-  preferredTheme: string | null;
-};
 
 @Component({
   standalone: true,
@@ -75,7 +40,10 @@ export class AppShell implements OnInit {
   protected readonly branding = inject(BrandingService);
   protected readonly selectedOrg = inject(SelectedOrgService);
   private readonly router = inject(Router);
-  private readonly http = inject(HttpClient);
+  private readonly navigationApi = inject(NavigationApi);
+  private readonly accountSettingsApi = inject(AccountSettingsApi);
+  private readonly notificationsApi = inject(NotificationsApi);
+  private readonly searchApi = inject(SearchApi);
 
   private readonly accountDropdown = viewChild<ElementRef<HTMLElement>>('accountDropdown');
   private readonly activityPanel = viewChild<ElementRef<HTMLElement>>('activityPanel');
@@ -93,12 +61,12 @@ export class AppShell implements OnInit {
   protected readonly orgMenuOpen = signal(false);
   protected readonly searchOpen = signal(false);
   protected readonly searchQuery = signal('');
-  protected readonly searchHits = signal<SearchHit[]>([]);
+  protected readonly searchHits = signal<SearchHitDto[]>([]);
   protected readonly searchBusy = signal(false);
 
-  protected readonly navigation = signal<NavigationSummary | null>(null);
+  protected readonly navigation = signal<NavigationSummaryDto | null>(null);
   protected readonly navigationError = signal<string | null>(null);
-  protected readonly notifications = signal<NotificationItem[]>([]);
+  protected readonly notifications = signal<NotificationDto[]>([]);
   protected readonly notificationsLoading = signal(false);
 
   private readonly searchTerms = new Subject<string>();
@@ -114,12 +82,14 @@ export class AppShell implements OnInit {
           if (term.length < 2) {
             this.searchHits.set([]);
             this.searchBusy.set(false);
-            return of({ hits: [] as SearchHit[] });
+            return of<SearchResultDto>({ hits: [] });
           }
-          const params: Record<string, string> = { q: term };
-          const orgId = this.selectedOrg.selectedOrgId();
-          if (orgId) params['organizationId'] = orgId;
-          return this.http.get<{ hits: SearchHit[] }>('/api/search', { params });
+          return from(
+            this.searchApi.searchSearch({
+              q: term,
+              organizationId: this.selectedOrg.selectedOrgId() ?? undefined
+            })
+          );
         })
       )
       .subscribe({
@@ -140,7 +110,7 @@ export class AppShell implements OnInit {
   protected async loadNavigation(): Promise<void> {
     this.navigationError.set(null);
     try {
-      const res = await firstValueFrom(this.http.get<NavigationSummary>('/api/navigation'));
+      const res = await this.navigationApi.navigationGet();
       this.navigation.set(res);
       this.applyStoredOrgSelection();
     } catch {
@@ -151,9 +121,7 @@ export class AppShell implements OnInit {
 
   private async applyAccountPreferences(): Promise<void> {
     try {
-      const settings = await firstValueFrom(
-        this.http.get<AccountSettings>('/api/account/settings')
-      );
+      const settings = await this.accountSettingsApi.accountSettingsGetSettings();
       const preferred = parseThemeId(settings.preferredTheme);
       if (preferred) this.theme.setTheme(preferred);
       const nav = this.navigation();
@@ -181,7 +149,7 @@ export class AppShell implements OnInit {
     this.selectedOrg.select(id);
   }
 
-  protected selectedOrganization(): NavigationOrganization | null {
+  protected selectedOrganization(): NavigationOrganizationDto | null {
     const nav = this.navigation();
     if (!nav?.organizations.length) return null;
     const id = this.selectedOrg.selectedOrgId();
@@ -248,9 +216,7 @@ export class AppShell implements OnInit {
   protected async loadNotifications(): Promise<void> {
     this.notificationsLoading.set(true);
     try {
-      const list = await firstValueFrom(
-        this.http.get<NotificationItem[]>('/api/notifications')
-      );
+      const list = await this.notificationsApi.notificationsList();
       this.notifications.set(list ?? []);
       await this.loadNavigation();
     } catch {
@@ -260,12 +226,12 @@ export class AppShell implements OnInit {
     }
   }
 
-  protected async markNotificationRead(n: NotificationItem, ev: Event): Promise<void> {
+  protected async markNotificationRead(n: NotificationDto, ev: Event): Promise<void> {
     ev.preventDefault();
     ev.stopPropagation();
     if (n.isRead) return;
     try {
-      await firstValueFrom(this.http.post(`/api/notifications/${n.id}/read`, {}));
+      await this.notificationsApi.notificationsMarkRead({ id: n.id });
       await this.loadNotifications();
     } catch {
       /* ignore */
@@ -274,14 +240,14 @@ export class AppShell implements OnInit {
 
   protected async markAllNotificationsRead(): Promise<void> {
     try {
-      await firstValueFrom(this.http.post('/api/notifications/read-all', {}));
+      await this.notificationsApi.notificationsMarkAllRead();
       await this.loadNotifications();
     } catch {
       /* ignore */
     }
   }
 
-  protected openNotification(n: NotificationItem): void {
+  protected openNotification(n: NotificationDto): void {
     void this.markNotificationRead(n, new Event('click'));
     this.closeNotificationsMenu();
     if (n.href) void this.router.navigateByUrl(n.href);
@@ -302,7 +268,7 @@ export class AppShell implements OnInit {
     this.searchOpen.set(false);
   }
 
-  protected openSearchHit(hit: SearchHit): void {
+  protected openSearchHit(hit: SearchHitDto): void {
     this.closeSearch();
     this.searchQuery.set('');
     this.searchHits.set([]);

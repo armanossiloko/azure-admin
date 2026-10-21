@@ -1,48 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { Component, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { DashboardApi, DashboardChecklistDto, DashboardDto, DashboardStatsDto } from '../../api';
 import { AuthService } from '../../auth/auth.service';
 import { SelectedOrgService } from '../../services/selected-org.service';
-
-type DashboardStats = {
-  activeReleasesCount: number;
-  openPullRequestsCount: number;
-  pullRequestsNeedingAttentionCount: number;
-  registeredRepositoriesCount: number;
-  distinctAzureDevOpsProjectsCount: number;
-};
-
-type DashboardChecklist = {
-  hasAzureOrganization: boolean;
-  hasTeam: boolean;
-  hasRegisteredRepository: boolean;
-  hasRelease: boolean;
-};
-
-type DashboardActivityItem = {
-  kind: string;
-  title: string;
-  subtitle: string | null;
-  occurredAt: string;
-  href: string | null;
-};
-
-type DashboardReleaseSummary = {
-  id: string;
-  title: string;
-  sprintLabel: string | null;
-  status: string;
-  createdAt: string;
-};
-
-type DashboardResponse = {
-  stats: DashboardStats;
-  checklist: DashboardChecklist;
-  activeReleaseHighlights: DashboardReleaseSummary[];
-  recentActivity: DashboardActivityItem[];
-};
 
 @Component({
   standalone: true,
@@ -52,10 +13,10 @@ type DashboardResponse = {
 })
 export class DashboardPage {
   protected readonly auth = inject(AuthService);
-  private readonly http = inject(HttpClient);
+  private readonly dashboardApi = inject(DashboardApi);
   private readonly selectedOrg = inject(SelectedOrgService);
 
-  protected readonly data = signal<DashboardResponse | null>(null);
+  protected readonly data = signal<DashboardDto | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
@@ -70,13 +31,9 @@ export class DashboardPage {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const params: Record<string, string> = {};
-      const orgId = this.selectedOrg.selectedOrgId();
-      if (orgId) params['organizationId'] = orgId;
-
-      const res = await firstValueFrom(
-        this.http.get<DashboardResponse>('/api/dashboard', { params })
-      );
+      const res = await this.dashboardApi.dashboardGet({
+        organizationId: this.selectedOrg.selectedOrgId() ?? undefined
+      });
       this.data.set(res);
     } catch {
       this.error.set('Could not load dashboard. Try again in a moment.');
@@ -87,31 +44,31 @@ export class DashboardPage {
   }
 
   /** Once every setup step is done the checklist is hidden. */
-  protected checklistComplete(c: DashboardChecklist): boolean {
+  protected checklistComplete(c: DashboardChecklistDto): boolean {
     return c.hasAzureOrganization && c.hasTeam && c.hasRegisteredRepository && c.hasRelease;
   }
 
-  protected checklistPercent(c: DashboardChecklist): number {
+  protected checklistPercent(c: DashboardChecklistDto): number {
     const n = [c.hasAzureOrganization, c.hasTeam, c.hasRegisteredRepository, c.hasRelease].filter(Boolean).length;
     return Math.round((n / 4) * 100);
   }
 
-  protected activeReleasesDelta(s: DashboardStats): string {
+  protected activeReleasesDelta(s: DashboardStatsDto): string {
     if (s.activeReleasesCount === 0) return 'No active releases';
     return 'Draft + active';
   }
 
-  protected openPrsDelta(s: DashboardStats): string {
+  protected openPrsDelta(s: DashboardStatsDto): string {
     if (s.openPullRequestsCount === 0) return 'All clear';
     return `${s.openPullRequestsCount} on active work`;
   }
 
-  protected attentionDelta(s: DashboardStats): string {
+  protected attentionDelta(s: DashboardStatsDto): string {
     if (s.pullRequestsNeedingAttentionCount === 0) return 'All clear';
     return 'Open on draft/active';
   }
 
-  protected reposDelta(s: DashboardStats): string {
+  protected reposDelta(s: DashboardStatsDto): string {
     const p = s.distinctAzureDevOpsProjectsCount;
     if (s.registeredRepositoriesCount === 0) return 'across 0 ADO projects';
     return `across ${p} ADO project${p === 1 ? '' : 's'}`;

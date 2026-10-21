@@ -2,22 +2,35 @@ using AzureAdmin.API.Models;
 
 namespace AzureAdmin.API.Contracts;
 
+/// <param name="CreatedByUserId">Null for releases created before creators were recorded.</param>
+/// <param name="CreatedByName">Creator's display name, falling back to e-mail.</param>
+/// <param name="UpdatedAt">Last edit of the release itself; null until the first edit.</param>
+/// <param name="ConcurrencyStamp">Send back in <see cref="UpdateReleaseRequest"/> to reject stale edits.</param>
 public sealed record ReleaseSummaryDto(
     Guid Id,
     string Title,
     string? SprintLabel,
     ReleaseLifecycleStatus Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? CreatedByUserId = null,
+    string? CreatedByName = null,
+    DateTimeOffset? UpdatedAt = null,
+    Guid? ConcurrencyStamp = null);
 
 public sealed record CreateReleaseRequest(string Title, string? SprintLabel);
 
 /// <param name="Title">When null, title is left unchanged.</param>
 /// <param name="SprintLabel">When null, sprint is left unchanged. Empty string clears it.</param>
 /// <param name="Status">Optional lifecycle transition (e.g. Archive).</param>
+/// <param name="ConcurrencyStamp">
+/// The stamp the client last read. When set and the release has changed since, the update is rejected with
+/// 409 Conflict. When omitted the update is applied unconditionally (older clients).
+/// </param>
 public sealed record UpdateReleaseRequest(
     string? Title = null,
     string? SprintLabel = null,
-    ReleaseLifecycleStatus? Status = null);
+    ReleaseLifecycleStatus? Status = null,
+    Guid? ConcurrencyStamp = null);
 
 public sealed record ReleaseDetailDto(
     Guid Id,
@@ -27,7 +40,11 @@ public sealed record ReleaseDetailDto(
     DateTimeOffset CreatedAt,
     IReadOnlyList<ReleaseTeamDto> Teams,
     IReadOnlyList<ReleasePullRequestDto> PullRequests,
-    IReadOnlyList<ReleaseRepositoryCommitNotesDto> RepositoryCommitNotes);
+    IReadOnlyList<ReleaseRepositoryCommitNotesDto> RepositoryCommitNotes,
+    Guid? CreatedByUserId = null,
+    string? CreatedByName = null,
+    DateTimeOffset? UpdatedAt = null,
+    Guid? ConcurrencyStamp = null);
 
 public sealed record ReleaseTeamDto(Guid Id, Guid TeamId, string TeamName);
 

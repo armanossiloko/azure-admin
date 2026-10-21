@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { apiErrorMessage } from '../../api';
 import { BrandingService, DEFAULT_BRANDING } from '../../services/branding.service';
 import { AppSettings, SettingsService } from '../../services/settings.service';
 import {
@@ -9,6 +9,7 @@ import {
   WebhookDefaultTemplates,
   WebhookKind,
   WebhookPlaceholder,
+  WebhookSettings,
   WebhookSubscription,
   WebhooksService
 } from '../../services/webhooks.service';
@@ -90,8 +91,8 @@ export class SettingsPage implements OnInit {
     this.error.set(null);
     try {
       const [settings, hooks] = await Promise.all([
-        firstValueFrom(this.settingsService.getSettings()),
-        firstValueFrom(this.webhooksService.getSettings())
+        this.settingsService.getSettings(),
+        this.webhooksService.getSettings()
       ]);
       this.applyLoaded(settings);
       this.applyWebhooks(hooks);
@@ -166,7 +167,7 @@ export class SettingsPage implements OnInit {
         brandingTagline: this.brandingTagline.trim(),
         brandingDescription: this.brandingDescription.trim()
       };
-      const updated = await firstValueFrom(this.settingsService.updateSettings(payload));
+      const updated = await this.settingsService.updateSettings(payload);
       this.applyLoaded(updated);
       this.brandingService.apply(updated.branding);
       this.saved.set(true);
@@ -222,8 +223,8 @@ export class SettingsPage implements OnInit {
       notifyOnDevToMasterMerged: hook.notifyOnDevToMasterMerged,
       notifyOnMasterToProdCreated: hook.notifyOnMasterToProdCreated,
       notifyOnMasterToProdMerged: hook.notifyOnMasterToProdMerged,
-      templateCreated: hook.templateCreated,
-      templateMerged: hook.templateMerged,
+      templateCreated: hook.templateCreated ?? null,
+      templateMerged: hook.templateMerged ?? null,
       customizeTemplates: !!(hook.templateCreated || hook.templateMerged)
     };
     this.webhookEditUrl = '';
@@ -270,16 +271,12 @@ export class SettingsPage implements OnInit {
     this.webhookNotice.set(null);
     this.webhookBusyId.set('new');
     try {
-      const created = await firstValueFrom(
-        this.webhooksService.create({
-          ...this.payloadFromDraft(this.webhookUrlDraft.trim())
-        })
-      );
+      const created = await this.webhooksService.create(this.payloadFromDraft(this.webhookUrlDraft.trim()));
       this.webhooks.set([...this.webhooks(), created].sort((a, b) => a.name.localeCompare(b.name)));
       this.cancelWebhookForm();
       this.webhookNotice.set(`Added ${created.name}.`);
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Could not add destination.'));
+      this.webhookError.set(apiErrorMessage(e, 'Could not add destination.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -291,12 +288,12 @@ export class SettingsPage implements OnInit {
     this.webhookBusyId.set(hook.id);
     try {
       const payload = this.payloadFromDraft(this.webhookEditUrl.trim() || null);
-      const updated = await firstValueFrom(this.webhooksService.update(hook.id, payload));
+      const updated = await this.webhooksService.update(hook.id, payload);
       this.replaceWebhook(updated);
       this.cancelWebhookForm();
       this.webhookNotice.set(`Saved ${updated.name}.`);
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Could not save destination.'));
+      this.webhookError.set(apiErrorMessage(e, 'Could not save destination.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -306,22 +303,20 @@ export class SettingsPage implements OnInit {
     this.webhookError.set(null);
     this.webhookBusyId.set(hook.id);
     try {
-      const updated = await firstValueFrom(
-        this.webhooksService.update(hook.id, {
-          name: hook.name,
-          url: null,
-          enabled,
-          notifyOnDevToMasterCreated: hook.notifyOnDevToMasterCreated,
-          notifyOnDevToMasterMerged: hook.notifyOnDevToMasterMerged,
-          notifyOnMasterToProdCreated: hook.notifyOnMasterToProdCreated,
-          notifyOnMasterToProdMerged: hook.notifyOnMasterToProdMerged,
-          templateCreated: hook.templateCreated,
-          templateMerged: hook.templateMerged
-        })
-      );
+      const updated = await this.webhooksService.update(hook.id, {
+        name: hook.name,
+        url: null,
+        enabled,
+        notifyOnDevToMasterCreated: hook.notifyOnDevToMasterCreated,
+        notifyOnDevToMasterMerged: hook.notifyOnDevToMasterMerged,
+        notifyOnMasterToProdCreated: hook.notifyOnMasterToProdCreated,
+        notifyOnMasterToProdMerged: hook.notifyOnMasterToProdMerged,
+        templateCreated: hook.templateCreated,
+        templateMerged: hook.templateMerged
+      });
       this.replaceWebhook(updated);
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Could not update destination.'));
+      this.webhookError.set(apiErrorMessage(e, 'Could not update destination.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -332,12 +327,12 @@ export class SettingsPage implements OnInit {
     this.webhookNotice.set(null);
     this.webhookBusyId.set(hook.id);
     try {
-      const result = await firstValueFrom(this.webhooksService.test(hook.id));
+      const result = await this.webhooksService.test(hook.id);
       if (result.ok) this.webhookNotice.set(`Test message sent to ${hook.name}. Check the channel to confirm it arrived.`);
       else this.webhookError.set(result.error || 'Test delivery failed.');
       await this.reloadWebhooks();
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Test delivery failed.'));
+      this.webhookError.set(apiErrorMessage(e, 'Test delivery failed.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -352,20 +347,18 @@ export class SettingsPage implements OnInit {
     const payload = this.payloadFromDraft(url || null);
     const name = payload.name || existing?.name || payload.kind;
     try {
-      const result = await firstValueFrom(
-        this.webhooksService.testDraft({
-          kind: existing?.kind ?? payload.kind,
-          url: url || null,
-          existingId: existing?.id ?? null,
-          templateCreated: payload.templateCreated,
-          templateMerged: payload.templateMerged,
-          merged: this.webhookTestMerged
-        })
-      );
+      const result = await this.webhooksService.testDraft({
+        kind: existing?.kind ?? payload.kind,
+        url: url || null,
+        existingId: existing?.id ?? null,
+        templateCreated: payload.templateCreated,
+        templateMerged: payload.templateMerged,
+        merged: this.webhookTestMerged
+      });
       if (result.ok) this.webhookNotice.set(`Test message sent to ${name}. Check the channel to confirm it arrived.`);
       else this.webhookError.set(result.error || 'Test delivery failed.');
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Test delivery failed.'));
+      this.webhookError.set(apiErrorMessage(e, 'Test delivery failed.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -376,12 +369,12 @@ export class SettingsPage implements OnInit {
     this.webhookError.set(null);
     this.webhookBusyId.set(hook.id);
     try {
-      await firstValueFrom(this.webhooksService.delete(hook.id));
+      await this.webhooksService.delete(hook.id);
       this.webhooks.set(this.webhooks().filter((h) => h.id !== hook.id));
       if (this.editingWebhookId() === hook.id) this.cancelWebhookForm();
       this.webhookNotice.set(`Removed ${hook.name}.`);
     } catch (e: unknown) {
-      this.webhookError.set(this.prettyWebhookError(e, 'Could not remove destination.'));
+      this.webhookError.set(apiErrorMessage(e, 'Could not remove destination.'));
     } finally {
       this.webhookBusyId.set(null);
     }
@@ -423,15 +416,11 @@ export class SettingsPage implements OnInit {
   }
 
   private async reloadWebhooks(): Promise<void> {
-    const hooks = await firstValueFrom(this.webhooksService.getSettings());
+    const hooks = await this.webhooksService.getSettings();
     this.applyWebhooks(hooks);
   }
 
-  private applyWebhooks(hooks: {
-    destinations: WebhookSubscription[];
-    defaults: WebhookDefaultTemplates;
-    placeholders: WebhookPlaceholder[];
-  }): void {
+  private applyWebhooks(hooks: WebhookSettings): void {
     this.webhooks.set(hooks.destinations ?? []);
     this.webhookDefaults.set(hooks.defaults);
     this.webhookPlaceholders.set(hooks.placeholders ?? []);
@@ -441,13 +430,4 @@ export class SettingsPage implements OnInit {
     return { ...this.webhooksService.emptyDraft(), customizeTemplates: false };
   }
 
-  private prettyWebhookError(e: unknown, fallback: string): string {
-    const http = e as { error?: unknown };
-    const body = http?.error;
-    if (typeof body === 'object' && body !== null && 'message' in body) {
-      const message = String((body as { message: unknown }).message ?? '').trim();
-      if (message) return message;
-    }
-    return fallback;
-  }
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace AzureAdmin.API.Tests;
 
@@ -92,7 +94,15 @@ public sealed class OutboundWebhookPublisherTests
             subscriptions,
             new SingleClientFactory(handler),
             new HttpContextAccessor(),
+            new StaticOptionsMonitor<AppOptions>(new AppOptions()),
             NullLogger<OutboundWebhookPublisher>.Instance);
+    }
+
+    private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+        public T Get(string? name) => value;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
     private sealed class SingleClientFactory(HttpMessageHandler handler) : IHttpClientFactory

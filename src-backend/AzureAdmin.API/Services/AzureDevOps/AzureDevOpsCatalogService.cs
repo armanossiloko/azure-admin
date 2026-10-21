@@ -17,14 +17,17 @@ public sealed class AzureDevOpsCatalogService
     private readonly IAzureDevOpsPatResolver _patResolver;
     private readonly ICurrentUser _currentUser;
     private readonly AzureDevOpsOptions _options;
+    private readonly ILogger<AzureDevOpsCatalogService> _logger;
 
     public AzureDevOpsCatalogService(
         ApplicationDbContext db,
         IHttpClientFactory httpClientFactory,
         IAzureDevOpsPatResolver patResolver,
         ICurrentUser currentUser,
-        IOptions<AzureDevOpsOptions> options)
+        IOptions<AzureDevOpsOptions> options,
+        ILogger<AzureDevOpsCatalogService> logger)
     {
+        _logger = logger;
         _db = db;
         _httpClientFactory = httpClientFactory;
         _patResolver = patResolver;
@@ -125,14 +128,15 @@ public sealed class AzureDevOpsCatalogService
 
     private async Task<string> GetJsonAsync(string pat, string url, CancellationToken cancellationToken)
     {
-        var http = _httpClientFactory.CreateClient();
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        http.DefaultRequestHeaders.Authorization = PatAuth(pat);
+        var http = _httpClientFactory.CreateClient(AzureDevOpsClient.ReadHttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Authorization = PatAuth(pat);
 
-        using var resp = await http.GetAsync(url, cancellationToken);
+        using var resp = await AzureDevOpsHttp.SendAsync(http, request, cancellationToken);
         var text = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps request failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("request", resp, text, _logger);
 
         return text;
     }

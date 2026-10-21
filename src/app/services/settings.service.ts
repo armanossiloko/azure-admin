@@ -1,8 +1,12 @@
-import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { map, Observable } from 'rxjs';
-import { Branding, DEFAULT_BRANDING } from './branding.service';
+import { Injectable, inject } from '@angular/core';
+import { AppSettingsDto, SettingsApi, UpdateAppSettingsRequest } from '../api';
+import { Branding, normalizeBranding } from './branding.service';
 
+/**
+ * Settings as the UI works with them: every field present, Jira keys as a list, branding resolved.
+ * The wire shape (`AppSettingsDto`) still carries the legacy `jiraProjectKey` and nullable overrides
+ * for older servers and clients; this service is where that compatibility lives.
+ */
 export type AppSettings = {
   conventionalCommitsEnabled: boolean;
   conventionalCommitsUseEmojis: boolean;
@@ -21,17 +25,7 @@ export type AppSettings = {
   branding: Branding;
 };
 
-/** Raw API payload; includes legacy `jiraProjectKey` for older backends / round-trips. */
-type AppSettingsResponse = Omit<AppSettings, 'jiraProjectKeys' | 'branding'> & {
-  jiraProjectKeys?: string[] | null;
-  jiraProjectKey?: string | null;
-  brandingApplicationName?: string | null;
-  brandingTagline?: string | null;
-  brandingDescription?: string | null;
-  branding?: Partial<Branding> | null;
-};
-
-function normalizeProjectKeys(settings: AppSettingsResponse): string[] {
+function normalizeProjectKeys(settings: AppSettingsDto): string[] {
   if (settings.jiraProjectKeys?.length) {
     return settings.jiraProjectKeys.map((k) => k.trim().toUpperCase()).filter(Boolean);
   }
@@ -47,49 +41,45 @@ function normalizeProjectKeys(settings: AppSettingsResponse): string[] {
   return [];
 }
 
-function normalizeBranding(settings: AppSettingsResponse): Branding {
-  const b = settings.branding;
-  return {
-    applicationName: b?.applicationName?.trim() || DEFAULT_BRANDING.applicationName,
-    tagline: b?.tagline?.trim() || DEFAULT_BRANDING.tagline,
-    description: b?.description?.trim() || DEFAULT_BRANDING.description
-  };
-}
-
-function normalizeSettings(settings: AppSettingsResponse): AppSettings {
+export function normalizeSettings(settings: AppSettingsDto): AppSettings {
   return {
     conventionalCommitsEnabled: settings.conventionalCommitsEnabled,
     conventionalCommitsUseEmojis: settings.conventionalCommitsUseEmojis,
     excludedGroups: settings.excludedGroups ?? [],
     sprintWeeks: settings.sprintWeeks ?? 0,
     jiraEnabled: settings.jiraEnabled,
-    jiraBaseUrl: settings.jiraBaseUrl,
+    jiraBaseUrl: settings.jiraBaseUrl ?? null,
     jiraProjectKeys: normalizeProjectKeys(settings),
     brandingApplicationName: settings.brandingApplicationName ?? null,
     brandingTagline: settings.brandingTagline ?? null,
     brandingDescription: settings.brandingDescription ?? null,
-    branding: normalizeBranding(settings)
+    branding: normalizeBranding(settings.branding)
   };
 }
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
-  constructor(private readonly http: HttpClient) {}
+  private readonly settingsApi = inject(SettingsApi);
 
-  getSettings(): Observable<AppSettings> {
-    return this.http.get<AppSettingsResponse>('/api/settings').pipe(map(normalizeSettings));
+  async getSettings(): Promise<AppSettings> {
+    return normalizeSettings(await this.settingsApi.settingsGet());
   }
 
-  updateSettings(settings: AppSettings): Observable<AppSettings> {
+  async updateSettings(settings: AppSettings): Promise<AppSettings> {
     // Send both shapes so a still-running older API that only knows jiraProjectKey keeps working.
-    const body: AppSettingsResponse = {
-      ...settings,
+    const body: UpdateAppSettingsRequest = {
+      conventionalCommitsEnabled: settings.conventionalCommitsEnabled,
+      conventionalCommitsUseEmojis: settings.conventionalCommitsUseEmojis,
+      excludedGroups: settings.excludedGroups,
+      sprintWeeks: settings.sprintWeeks,
+      jiraEnabled: settings.jiraEnabled,
+      jiraBaseUrl: settings.jiraBaseUrl,
       jiraProjectKeys: settings.jiraProjectKeys,
       jiraProjectKey: settings.jiraProjectKeys.length ? settings.jiraProjectKeys.join(',') : null,
       brandingApplicationName: settings.brandingApplicationName,
       brandingTagline: settings.brandingTagline,
       brandingDescription: settings.brandingDescription
     };
-    return this.http.put<AppSettingsResponse>('/api/settings', body).pipe(map(normalizeSettings));
+    return normalizeSettings(await this.settingsApi.settingsUpdate({ body }));
   }
 }

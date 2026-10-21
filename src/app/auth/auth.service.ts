@@ -1,16 +1,11 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { AuthApi, CurrentUserDto } from '../api';
 
-export interface CurrentUser {
-  id: string;
-  email: string;
-  displayName: string | null;
-}
+export type CurrentUser = CurrentUserDto;
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly http = inject(HttpClient);
+  private readonly authApi = inject(AuthApi);
 
   readonly user = signal<CurrentUser | null>(null);
   private sessionResolved = false;
@@ -27,21 +22,20 @@ export class AuthService {
 
   async refreshMe(): Promise<void> {
     try {
-      const me = await firstValueFrom(this.http.get<CurrentUser>('/api/auth/me'));
+      const me = await this.authApi.authMe();
       this.user.set(me);
     } catch {
       this.user.set(null);
     }
   }
 
+  /** Full-page navigations: the login/logout endpoints answer with OIDC redirects, not JSON. */
   redirectToLogin(returnUrl?: string): void {
-    const url = returnUrl
-      ? `/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
-      : '/api/auth/login';
-    window.location.href = url;
+    const path = this.authApi.rootUrl + AuthApi.AuthLoginPath;
+    window.location.href = returnUrl ? `${path}?returnUrl=${encodeURIComponent(returnUrl)}` : path;
   }
 
   async logout(): Promise<void> {
-    window.location.href = '/api/auth/logout';
+    window.location.href = this.authApi.rootUrl + AuthApi.AuthLogoutPath;
   }
 }

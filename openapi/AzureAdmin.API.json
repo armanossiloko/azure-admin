@@ -1,0 +1,3981 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Azure Admin API",
+    "description": "Release control for Azure DevOps: teams, repositories, promotion pull requests, and settings.",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/account/settings": {
+      "get": {
+        "tags": [
+          "AccountSettings"
+        ],
+        "operationId": "AccountSettings_GetSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "AccountSettings"
+        ],
+        "operationId": "AccountSettings_UpdateSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateAccountSettingsRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/action-log": {
+      "get": {
+        "tags": [
+          "AdminActionLog"
+        ],
+        "operationId": "AdminActionLog_List",
+        "parameters": [
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminActionLogDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "Auth_Login",
+        "parameters": [
+          {
+            "name": "returnUrl",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "Auth_Logout",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "Auth_Me",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUserDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/azure-devops/catalog/organizations/{organizationId}/projects": {
+      "get": {
+        "tags": [
+          "AzureDevOpsCatalog"
+        ],
+        "operationId": "AzureDevOpsCatalog_ListProjects",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AzureCatalogProjectDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/azure-devops/catalog/organizations/{organizationId}/repositories": {
+      "get": {
+        "tags": [
+          "AzureDevOpsCatalog"
+        ],
+        "operationId": "AzureDevOpsCatalog_ListRepositories",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AzureCatalogRepositoryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/azure-devops/organizations": {
+      "get": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_List",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateAzureDevOpsOrganizationRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/azure-devops/organizations/{id}": {
+      "get": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_Get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_Update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateAzureDevOpsOrganizationRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/azure-devops/organizations/{id}/pat-credential": {
+      "put": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_UpsertPatCredential",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpsertOrganizationPatCredentialRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AzureDevOpsOrganizations"
+        ],
+        "operationId": "AzureDevOpsOrganizations_DeletePatCredential",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AzureDevOpsOrganizationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/branding": {
+      "get": {
+        "tags": [
+          "Branding"
+        ],
+        "operationId": "Branding_Get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "operationId": "Dashboard_Get",
+        "parameters": [
+          {
+            "name": "recentHours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 48
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/git/branches": {
+      "get": {
+        "tags": [
+          "GitBranches"
+        ],
+        "operationId": "GitBranches_List",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registeredRepositoryId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "staleDays",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "staleOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GitBranchDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "GitBranches"
+        ],
+        "operationId": "GitBranches_Delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DeleteGitBranchRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteGitBranchResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "Health_Get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/navigation": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "operationId": "Navigation_Get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NavigationSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "Notifications_List",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "Notifications_MarkRead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "Notifications_MarkAllRead",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/registered-repositories": {
+      "get": {
+        "tags": [
+          "RegisteredRepositories"
+        ],
+        "operationId": "RegisteredRepositories_List",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegisteredRepositoryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "RegisteredRepositories"
+        ],
+        "operationId": "RegisteredRepositories_Register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/RegisterRepositoryRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredRepositoryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/registered-repositories/{id}": {
+      "patch": {
+        "tags": [
+          "RegisteredRepositories"
+        ],
+        "operationId": "RegisteredRepositories_Patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/PatchRegisteredRepositoryRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredRepositoryDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "RegisteredRepositories"
+        ],
+        "operationId": "RegisteredRepositories_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/releases": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_List",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ReleaseLifecycleStatus"
+                }
+              ]
+            }
+          },
+          {
+            "name": "sprintLabel",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseSummaryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateReleaseRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/find-or-create": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_FindOrCreateRelease",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateReleaseRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{id}": {
+      "get": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_Get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseDetailDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_Update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateReleaseRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/teams/{teamId}/pull-requests/preflight": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_PreflightPullRequests",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/BatchCreateReleasePullRequestsRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPreflightResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/teams/{teamId}/pull-requests/batch": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_BatchCreatePullRequests",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/BatchCreateReleasePullRequestsRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateReleasePullRequestsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/pull-requests/batch": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_BatchCreatePullRequestsForTeams",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MultiTeamBatchCreateReleasePullRequestsRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MultiTeamBatchCreateReleasePullRequestsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/pull-requests/{pullRequestId}": {
+      "delete": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_RemovePullRequest",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pullRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/pull-requests/complete-batch": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_CompletePullRequestsBatch",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CompletePullRequestsBatchRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletePullRequestsBatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/pull-requests/status-refresh": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_RefreshPullRequestStatuses",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshPullRequestStatusesRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshPullRequestStatusesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/commit-notes/refresh": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_RefreshCommitNotes",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/releases/{releaseId}/teams": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_AddTeam",
+        "parameters": [
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AddTeamToReleaseRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseTeamDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/releases/{id}/close": {
+      "post": {
+        "tags": [
+          "Releases"
+        ],
+        "operationId": "Releases_Close",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "concurrencyStamp",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseSummaryDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "operationId": "Search_Search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "Settings_Get",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "Settings_Update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateAppSettingsRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams": {
+      "get": {
+        "tags": [
+          "Teams"
+        ],
+        "operationId": "Teams_List",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Teams"
+        ],
+        "operationId": "Teams_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateTeamRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{id}": {
+      "get": {
+        "tags": [
+          "Teams"
+        ],
+        "operationId": "Teams_Get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Teams"
+        ],
+        "operationId": "Teams_Update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateTeamRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Teams"
+        ],
+        "operationId": "Teams_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/settings/webhooks": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_List",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateWebhookSubscriptionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscriptionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/webhooks/{id}": {
+      "put": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_Update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateWebhookSubscriptionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscriptionDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_Delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/settings/webhooks/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_TestDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TestWebhookDraftRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookTestResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/webhooks/{id}/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "operationId": "Webhooks_Test",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "merged",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookTestResultDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountSettingsDto": {
+        "required": [
+          "email",
+          "notifyPatExpiry",
+          "userId"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "preferredTheme": {
+            "type": "string",
+            "nullable": true
+          },
+          "notifyPatExpiry": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AddTeamToReleaseRequest": {
+        "required": [
+          "teamId"
+        ],
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AdminActionLogDto": {
+        "required": [
+          "action",
+          "createdAt",
+          "id",
+          "success",
+          "targetKey",
+          "targetType",
+          "userId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string"
+          },
+          "targetKey": {
+            "type": "string"
+          },
+          "detailsJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppSettingsDto": {
+        "required": [
+          "conventionalCommitsEnabled",
+          "conventionalCommitsUseEmojis",
+          "excludedGroups",
+          "jiraEnabled",
+          "jiraProjectKeys",
+          "sprintWeeks"
+        ],
+        "type": "object",
+        "properties": {
+          "conventionalCommitsEnabled": {
+            "type": "boolean"
+          },
+          "conventionalCommitsUseEmojis": {
+            "type": "boolean"
+          },
+          "excludedGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sprintWeeks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "jiraEnabled": {
+            "type": "boolean"
+          },
+          "jiraBaseUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "jiraProjectKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jiraProjectKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "brandingApplicationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "brandingTagline": {
+            "type": "string",
+            "nullable": true
+          },
+          "brandingDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "branding": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BrandingDto"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AzureCatalogProjectDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AzureCatalogRepositoryDto": {
+        "required": [
+          "id",
+          "name",
+          "projectName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AzureDevOpsOrganizationSummaryDto": {
+        "required": [
+          "hasPatCredential",
+          "id",
+          "organizationDisplay",
+          "organizationKey"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationKey": {
+            "type": "string"
+          },
+          "organizationDisplay": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasPatCredential": {
+            "type": "boolean"
+          },
+          "patCredentialId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "patUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "patExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchCreateReleasePullRequestsRequest": {
+        "required": [
+          "phase",
+          "registeredRepositoryIds",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceBranch": {
+            "type": "string",
+            "nullable": true
+          },
+          "targetBranch": {
+            "type": "string",
+            "nullable": true
+          },
+          "registeredRepositoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchCreateReleasePullRequestsResponse": {
+        "required": [
+          "results",
+          "skippedDecommissionedRepositories"
+        ],
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedPullRequestResult"
+            }
+          },
+          "skippedDecommissionedRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchPreflightRepoResult": {
+        "required": [
+          "issues",
+          "ok",
+          "registeredRepositoryId",
+          "repositoryIdOrName"
+        ],
+        "type": "object",
+        "properties": {
+          "registeredRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchPreflightResponse": {
+        "required": [
+          "canProceed",
+          "repositories",
+          "skippedDecommissionedRepositories"
+        ],
+        "type": "object",
+        "properties": {
+          "canProceed": {
+            "type": "boolean"
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchPreflightRepoResult"
+            }
+          },
+          "skippedDecommissionedRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "BrandingDto": {
+        "required": [
+          "applicationName",
+          "description",
+          "tagline"
+        ],
+        "type": "object",
+        "properties": {
+          "applicationName": {
+            "type": "string"
+          },
+          "tagline": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommitGroupDto": {
+        "required": [
+          "commits",
+          "groupName",
+          "isBreaking"
+        ],
+        "type": "object",
+        "properties": {
+          "groupName": {
+            "type": "string"
+          },
+          "isBreaking": {
+            "type": "boolean"
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrichedCommitItemDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompletePullRequestsBatchRequest": {
+        "required": [
+          "phase"
+        ],
+        "type": "object",
+        "properties": {
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompletePullRequestsBatchResponse": {
+        "required": [
+          "results"
+        ],
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompletedPullRequestResult"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CompletedPullRequestResult": {
+        "required": [
+          "pullRequestId",
+          "repositoryIdOrName",
+          "success"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "pullRequestId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateAzureDevOpsOrganizationRequest": {
+        "required": [
+          "organization"
+        ],
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "string"
+          },
+          "organizationDisplay": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateReleaseRequest": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "sprintLabel": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateTeamRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parentTeamId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateWebhookSubscriptionRequest": {
+        "required": [
+          "enabled",
+          "kind",
+          "name",
+          "notifyOnDevToMasterCreated",
+          "notifyOnDevToMasterMerged",
+          "notifyOnMasterToProdCreated",
+          "notifyOnMasterToProdMerged",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookDestinationKind"
+              }
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "notifyOnDevToMasterCreated": {
+            "type": "boolean"
+          },
+          "notifyOnDevToMasterMerged": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdCreated": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdMerged": {
+            "type": "boolean"
+          },
+          "templateCreated": {
+            "type": "string",
+            "nullable": true
+          },
+          "templateMerged": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreatedPullRequestResult": {
+        "required": [
+          "pullRequestId",
+          "repositoryIdOrName",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "pullRequestId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "url": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CurrentUserDto": {
+        "required": [
+          "email",
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DashboardActivityDto": {
+        "required": [
+          "kind",
+          "occurredAt",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "href": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DashboardChecklistDto": {
+        "required": [
+          "hasAzureOrganization",
+          "hasRegisteredRepository",
+          "hasRelease",
+          "hasTeam"
+        ],
+        "type": "object",
+        "properties": {
+          "hasAzureOrganization": {
+            "type": "boolean"
+          },
+          "hasTeam": {
+            "type": "boolean"
+          },
+          "hasRegisteredRepository": {
+            "type": "boolean"
+          },
+          "hasRelease": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DashboardDto": {
+        "required": [
+          "activeReleaseHighlights",
+          "checklist",
+          "recentActivity",
+          "stats"
+        ],
+        "type": "object",
+        "properties": {
+          "stats": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardStatsDto"
+              }
+            ]
+          },
+          "checklist": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardChecklistDto"
+              }
+            ]
+          },
+          "activeReleaseHighlights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardReleaseSummaryDto"
+            }
+          },
+          "recentActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardActivityDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DashboardReleaseSummaryDto": {
+        "required": [
+          "createdAt",
+          "id",
+          "status",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sprintLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DashboardStatsDto": {
+        "required": [
+          "activeReleasesCount",
+          "distinctAzureDevOpsProjectsCount",
+          "openPullRequestsCount",
+          "pullRequestsNeedingAttentionCount",
+          "registeredRepositoriesCount"
+        ],
+        "type": "object",
+        "properties": {
+          "activeReleasesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "openPullRequestsCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pullRequestsNeedingAttentionCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "registeredRepositoriesCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distinctAzureDevOpsProjectsCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeleteGitBranchRequest": {
+        "required": [
+          "branchName",
+          "registeredRepositoryId"
+        ],
+        "type": "object",
+        "properties": {
+          "registeredRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "branchName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeleteGitBranchResult": {
+        "required": [
+          "branchName",
+          "success",
+          "targetKey"
+        ],
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "targetKey": {
+            "type": "string"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnrichedCommitItemDto": {
+        "required": [
+          "authorName",
+          "commitId",
+          "committedDate",
+          "description",
+          "isBreaking",
+          "jiraReferences",
+          "rawComment"
+        ],
+        "type": "object",
+        "properties": {
+          "commitId": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "committedDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rawComment": {
+            "type": "string"
+          },
+          "conventionalType": {
+            "type": "string",
+            "nullable": true
+          },
+          "scope": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "isBreaking": {
+            "type": "boolean"
+          },
+          "jiraReferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JiraTicketRefDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "GitBranchDto": {
+        "required": [
+          "azureDevOpsOrganization",
+          "azureDevOpsProject",
+          "branchName",
+          "isProtected",
+          "isStale",
+          "objectId",
+          "refName",
+          "registeredRepositoryId",
+          "repositoryIdOrName"
+        ],
+        "type": "object",
+        "properties": {
+          "registeredRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "azureDevOpsOrganization": {
+            "type": "string"
+          },
+          "azureDevOpsProject": {
+            "type": "string"
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "refName": {
+            "type": "string"
+          },
+          "objectId": {
+            "type": "string"
+          },
+          "lastCommitDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "daysSinceLastCommit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "isProtected": {
+            "type": "boolean"
+          },
+          "isStale": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "JiraTicketRefDto": {
+        "required": [
+          "key",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MultiTeamBatchCreateReleasePullRequestsRequest": {
+        "required": [
+          "phase",
+          "teams",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceBranch": {
+            "type": "string",
+            "nullable": true
+          },
+          "targetBranch": {
+            "type": "string",
+            "nullable": true
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamPullRequestBatch"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "MultiTeamBatchCreateReleasePullRequestsResponse": {
+        "required": [
+          "results",
+          "skippedDecommissionedRepositories",
+          "teamErrors"
+        ],
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedPullRequestResult"
+            }
+          },
+          "skippedDecommissionedRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "teamErrors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "NavigationOrganizationDto": {
+        "required": [
+          "displayName",
+          "hasPatCredential",
+          "id",
+          "organizationKey"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "organizationKey": {
+            "type": "string"
+          },
+          "hasPatCredential": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NavigationSummaryDto": {
+        "required": [
+          "activityPreview",
+          "appVersion",
+          "organizations",
+          "unreadNotificationsCount"
+        ],
+        "type": "object",
+        "properties": {
+          "organizations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationOrganizationDto"
+            }
+          },
+          "activityPreview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardActivityDto"
+            }
+          },
+          "unreadNotificationsCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "appVersion": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationDto": {
+        "required": [
+          "createdAt",
+          "id",
+          "isRead",
+          "kind",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true
+          },
+          "href": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isRead": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PatchRegisteredRepositoryRequest": {
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "isDecommissioned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefreshPullRequestStatusesRequest": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RefreshPullRequestStatusesResponse": {
+        "required": [
+          "results"
+        ],
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleasePullRequestStatusResult"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisterRepositoryRequest": {
+        "required": [
+          "azureDevOpsOrganization",
+          "azureDevOpsProject",
+          "repositoryIdOrName",
+          "teamId"
+        ],
+        "type": "object",
+        "properties": {
+          "azureDevOpsOrganization": {
+            "type": "string"
+          },
+          "azureDevOpsProject": {
+            "type": "string"
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RegisteredRepositoryDto": {
+        "required": [
+          "azureDevOpsOrganization",
+          "azureDevOpsProject",
+          "id",
+          "isDecommissioned",
+          "repositoryIdOrName",
+          "teamId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "azureDevOpsOrganization": {
+            "type": "string"
+          },
+          "azureDevOpsProject": {
+            "type": "string"
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isDecommissioned": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseCommitItemDto": {
+        "required": [
+          "authorName",
+          "comment",
+          "commitId",
+          "committedDate"
+        ],
+        "type": "object",
+        "properties": {
+          "commitId": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "committedDate": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseDetailDto": {
+        "required": [
+          "createdAt",
+          "id",
+          "pullRequests",
+          "repositoryCommitNotes",
+          "status",
+          "teams",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sprintLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseLifecycleStatus"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseTeamDto"
+            }
+          },
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleasePullRequestDto"
+            }
+          },
+          "repositoryCommitNotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRepositoryCommitNotesDto"
+            }
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseLifecycleStatus": {
+        "enum": [
+          "Draft",
+          "Active",
+          "Completed",
+          "Archived"
+        ],
+        "type": "string"
+      },
+      "ReleasePrPhase": {
+        "enum": [
+          "DevToMaster",
+          "MasterToProd",
+          "ProdToDev"
+        ],
+        "type": "string"
+      },
+      "ReleasePullRequestDto": {
+        "required": [
+          "azureDevOpsPullRequestId",
+          "createdAt",
+          "id",
+          "phase",
+          "registeredRepositoryId",
+          "repositoryIdOrName",
+          "sourceRefName",
+          "status",
+          "targetRefName",
+          "teamId",
+          "teamName",
+          "title",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamName": {
+            "type": "string"
+          },
+          "registeredRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ]
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePullRequestStatus"
+              }
+            ]
+          },
+          "azureDevOpsPullRequestId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "url": {
+            "type": "string"
+          },
+          "sourceRefName": {
+            "type": "string"
+          },
+          "targetRefName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleasePullRequestStatus": {
+        "enum": [
+          "Unknown",
+          "Active",
+          "Completed",
+          "Abandoned"
+        ],
+        "type": "string"
+      },
+      "ReleasePullRequestStatusResult": {
+        "required": [
+          "pullRequestId",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "pullRequestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePullRequestStatus"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseRepositoryCommitNotesDto": {
+        "required": [
+          "commits",
+          "fetchedAt",
+          "phase",
+          "registeredRepositoryId",
+          "repositoryIdOrName",
+          "sourceRefName",
+          "targetRefName"
+        ],
+        "type": "object",
+        "properties": {
+          "registeredRepositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "repositoryIdOrName": {
+            "type": "string"
+          },
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ]
+          },
+          "sourceRefName": {
+            "type": "string"
+          },
+          "targetRefName": {
+            "type": "string"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseCommitItemDto"
+            }
+          },
+          "commitGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitGroupDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseSummaryDto": {
+        "required": [
+          "createdAt",
+          "id",
+          "status",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sprintLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseLifecycleStatus"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdByUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReleaseTeamDto": {
+        "required": [
+          "id",
+          "teamId",
+          "teamName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teamName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchHitDto": {
+        "required": [
+          "href",
+          "kind",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "href": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchResultDto": {
+        "required": [
+          "hits"
+        ],
+        "type": "object",
+        "properties": {
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "TeamDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentTeamId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TeamPullRequestBatch": {
+        "required": [
+          "registeredRepositoryIds",
+          "teamId"
+        ],
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "registeredRepositoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "TestWebhookDraftRequest": {
+        "required": [
+          "kind",
+          "merged"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookDestinationKind"
+              }
+            ]
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "templateCreated": {
+            "type": "string",
+            "nullable": true
+          },
+          "templateMerged": {
+            "type": "string",
+            "nullable": true
+          },
+          "merged": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateAccountSettingsRequest": {
+        "required": [
+          "updateDefaultOrganization"
+        ],
+        "type": "object",
+        "properties": {
+          "updateDefaultOrganization": {
+            "type": "boolean"
+          },
+          "defaultOrganizationId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "preferredTheme": {
+            "type": "string",
+            "nullable": true
+          },
+          "notifyPatExpiry": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateAppSettingsRequest": {
+        "required": [
+          "conventionalCommitsEnabled",
+          "conventionalCommitsUseEmojis",
+          "excludedGroups",
+          "jiraEnabled"
+        ],
+        "type": "object",
+        "properties": {
+          "conventionalCommitsEnabled": {
+            "type": "boolean"
+          },
+          "conventionalCommitsUseEmojis": {
+            "type": "boolean"
+          },
+          "excludedGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "jiraEnabled": {
+            "type": "boolean"
+          },
+          "jiraBaseUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "jiraProjectKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "jiraProjectKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "sprintWeeks": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "brandingApplicationName": {
+            "type": "string",
+            "nullable": true
+          },
+          "brandingTagline": {
+            "type": "string",
+            "nullable": true
+          },
+          "brandingDescription": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateAzureDevOpsOrganizationRequest": {
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "organizationDisplay": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateReleaseRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "sprintLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseLifecycleStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "concurrencyStamp": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTeamRequest": {
+        "required": [
+          "clearParent"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "parentTeamId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "clearParent": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateWebhookSubscriptionRequest": {
+        "required": [
+          "enabled",
+          "name",
+          "notifyOnDevToMasterCreated",
+          "notifyOnDevToMasterMerged",
+          "notifyOnMasterToProdCreated",
+          "notifyOnMasterToProdMerged"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "notifyOnDevToMasterCreated": {
+            "type": "boolean"
+          },
+          "notifyOnDevToMasterMerged": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdCreated": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdMerged": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "templateCreated": {
+            "type": "string",
+            "nullable": true
+          },
+          "templateMerged": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpsertOrganizationPatCredentialRequest": {
+        "required": [
+          "pat",
+          "patExpiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "pat": {
+            "type": "string"
+          },
+          "patExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookDefaultTemplatesDto": {
+        "required": [
+          "created",
+          "merged",
+          "samplePreview"
+        ],
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "string"
+          },
+          "merged": {
+            "type": "string"
+          },
+          "samplePreview": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookDestinationKind": {
+        "enum": [
+          "Teams",
+          "Slack",
+          "Discord"
+        ],
+        "type": "string"
+      },
+      "WebhookPlaceholderDto": {
+        "required": [
+          "description",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookSettingsDto": {
+        "required": [
+          "defaults",
+          "destinations",
+          "placeholders"
+        ],
+        "type": "object",
+        "properties": {
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookSubscriptionDto"
+            }
+          },
+          "defaults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookDefaultTemplatesDto"
+              }
+            ]
+          },
+          "placeholders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookPlaceholderDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookSubscriptionDto": {
+        "required": [
+          "createdAt",
+          "enabled",
+          "id",
+          "kind",
+          "name",
+          "notifyOnDevToMasterCreated",
+          "notifyOnDevToMasterMerged",
+          "notifyOnMasterToProdCreated",
+          "notifyOnMasterToProdMerged",
+          "updatedAt",
+          "urlPreview"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookDestinationKind"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "urlPreview": {
+            "type": "string"
+          },
+          "notifyOnDevToMasterCreated": {
+            "type": "boolean"
+          },
+          "notifyOnDevToMasterMerged": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdCreated": {
+            "type": "boolean"
+          },
+          "notifyOnMasterToProdMerged": {
+            "type": "boolean"
+          },
+          "templateCreated": {
+            "type": "string",
+            "nullable": true
+          },
+          "templateMerged": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastDeliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastDeliveryError": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebhookTestResultDto": {
+        "required": [
+          "ok"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "AccountSettings"
+    },
+    {
+      "name": "AdminActionLog"
+    },
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "AzureDevOpsCatalog"
+    },
+    {
+      "name": "AzureDevOpsOrganizations"
+    },
+    {
+      "name": "Branding"
+    },
+    {
+      "name": "Dashboard"
+    },
+    {
+      "name": "GitBranches"
+    },
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Navigation"
+    },
+    {
+      "name": "Notifications"
+    },
+    {
+      "name": "RegisteredRepositories"
+    },
+    {
+      "name": "Releases"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Settings"
+    },
+    {
+      "name": "Teams"
+    },
+    {
+      "name": "Webhooks"
+    }
+  ]
+}

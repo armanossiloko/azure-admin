@@ -280,8 +280,15 @@ namespace AzureAdmin.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("SprintLabel")
                         .HasMaxLength(128)
@@ -295,7 +302,12 @@ namespace AzureAdmin.API.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.ToTable("Releases");
                 });
@@ -311,6 +323,9 @@ namespace AzureAdmin.API.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Phase")
                         .HasColumnType("integer");
@@ -349,7 +364,11 @@ namespace AzureAdmin.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedByUserId");
+
                     b.HasIndex("RegisteredRepositoryId");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("TeamId");
 
@@ -797,8 +816,23 @@ namespace AzureAdmin.API.Migrations
                     b.Navigation("Team");
                 });
 
+            modelBuilder.Entity("AzureAdmin.API.Models.Release", b =>
+                {
+                    b.HasOne("AzureAdmin.API.Models.ApplicationUser", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedBy");
+                });
+
             modelBuilder.Entity("AzureAdmin.API.Models.ReleasePullRequest", b =>
                 {
+                    b.HasOne("AzureAdmin.API.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("AzureAdmin.API.Models.RegisteredRepository", "RegisteredRepository")
                         .WithMany("ReleasePullRequests")
                         .HasForeignKey("RegisteredRepositoryId")

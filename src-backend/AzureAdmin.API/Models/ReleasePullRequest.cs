@@ -18,4 +18,10 @@ public sealed class ReleasePullRequest
     public string TargetRefName { get; set; } = "";
     public string Title { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// User whose PAT opened the PR. Null on rows created before this column existed; the background
+    /// status sync then falls back to any user holding a valid PAT for the organization.
+    /// </summary>
+    public Guid? CreatedByUserId { get; set; }
 }

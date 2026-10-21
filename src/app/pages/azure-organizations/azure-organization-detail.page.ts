@@ -1,20 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
-
-type AzureDevOpsOrganizationSummary = {
-  id: string;
-  organizationKey: string;
-  organizationDisplay: string;
-  notes: string | null;
-  hasPatCredential: boolean;
-  patCredentialId: string | null;
-  patUpdatedAt: string | null;
-  patExpiresAt: string | null;
-};
+import { AzureDevOpsOrganizationsApi, AzureDevOpsOrganizationSummaryDto, apiErrorMessage } from '../../api';
 
 @Component({
   standalone: true,
@@ -23,11 +11,11 @@ type AzureDevOpsOrganizationSummary = {
   templateUrl: './azure-organization-detail.page.html'
 })
 export class AzureOrganizationDetailPage implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly organizationsApi = inject(AzureDevOpsOrganizationsApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  protected readonly org = signal<AzureDevOpsOrganizationSummary | null>(null);
+  protected readonly org = signal<AzureDevOpsOrganizationSummaryDto | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly info = signal<string | null>(null);
   protected readonly busy = signal(false);
@@ -36,7 +24,7 @@ export class AzureOrganizationDetailPage implements OnInit {
   protected readonly newPatExpires = signal('');
   protected readonly editDisplay = signal('');
 
-  protected patExpired(o: AzureDevOpsOrganizationSummary): boolean {
+  protected patExpired(o: AzureDevOpsOrganizationSummaryDto): boolean {
     if (!o?.patExpiresAt) return false;
     return new Date(o.patExpiresAt) <= new Date();
   }
@@ -53,17 +41,13 @@ export class AzureOrganizationDetailPage implements OnInit {
       return;
     }
     try {
-      const o = await firstValueFrom(this.http.get<AzureDevOpsOrganizationSummary>(`/api/azure-devops/organizations/${id}`));
+      const o = await this.organizationsApi.azureDevOpsOrganizationsGet({ id });
       this.org.set(o);
       this.editDisplay.set(o.organizationDisplay);
       this.newPat.set('');
-      if (o.patExpiresAt) {
-        this.newPatExpires.set(o.patExpiresAt.slice(0, 10));
-      } else {
-        this.newPatExpires.set('');
-      }
+      this.newPatExpires.set(o.patExpiresAt ? o.patExpiresAt.slice(0, 10) : '');
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
       this.org.set(null);
     }
   }
@@ -75,15 +59,14 @@ export class AzureOrganizationDetailPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.put(`/api/azure-devops/organizations/${o.id}`, {
-          organizationDisplay: this.editDisplay().trim() || null,
-        })
-      );
+      await this.organizationsApi.azureDevOpsOrganizationsUpdate({
+        id: o.id,
+        body: { organizationDisplay: this.editDisplay().trim() || null }
+      });
       this.info.set('Organization details saved.');
       await this.reload();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
@@ -98,8 +81,13 @@ export class AzureOrganizationDetailPage implements OnInit {
       this.error.set('PAT is required.');
       return;
     }
-    const patExpiresAt = date ? `${date}T23:59:59.000Z` : null;
-    if (patExpiresAt && new Date(patExpiresAt) <= new Date()) {
+    // The API requires the expiry (it drives the expiry notifications), so the form does too.
+    if (!date) {
+      this.error.set('PAT expiration date is required (copy it from the token settings in Azure DevOps).');
+      return;
+    }
+    const patExpiresAt = `${date}T23:59:59.000Z`;
+    if (new Date(patExpiresAt) <= new Date()) {
       this.error.set('PAT expiration must be in the future.');
       return;
     }
@@ -107,17 +95,15 @@ export class AzureOrganizationDetailPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(
-        this.http.put(`/api/azure-devops/organizations/${o.id}/pat-credential`, {
-          pat,
-          patExpiresAt,
-        })
-      );
+      await this.organizationsApi.azureDevOpsOrganizationsUpsertPatCredential({
+        id: o.id,
+        body: { pat, patExpiresAt }
+      });
       this.newPat.set('');
       this.info.set('PAT saved (encrypted on the server). Release PRs use your identity for this org.');
       await this.reload();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
@@ -131,11 +117,11 @@ export class AzureOrganizationDetailPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(this.http.delete(`/api/azure-devops/organizations/${o.id}/pat-credential`));
+      await this.organizationsApi.azureDevOpsOrganizationsDeletePatCredential({ id: o.id });
       this.info.set('PAT removed.');
       await this.reload();
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
@@ -149,23 +135,13 @@ export class AzureOrganizationDetailPage implements OnInit {
     this.error.set(null);
     this.info.set(null);
     try {
-      await firstValueFrom(this.http.delete(`/api/azure-devops/organizations/${o.id}`));
+      await this.organizationsApi.azureDevOpsOrganizationsDelete({ id: o.id });
       await this.router.navigateByUrl('/settings/azure-organizations');
     } catch (e: unknown) {
-      this.error.set(this.fmtErr(e));
+      this.error.set(apiErrorMessage(e));
     } finally {
       this.busy.set(false);
     }
-  }
-
-  private fmtErr(e: unknown): string {
-    const http = e as { error?: unknown; message?: string };
-    const body = http?.error;
-    if (typeof body === 'object' && body !== null && 'message' in body) {
-      return String((body as { message: unknown }).message);
-    }
-    if (typeof body === 'string') return body;
-    return http?.message ?? 'Request failed.';
   }
 
   protected async deleteOrg(): Promise<void> {
