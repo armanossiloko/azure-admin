@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text.Json.Serialization;
 using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.DependencyInjection;
@@ -11,24 +10,13 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers(options =>
-    {
-        // The API only speaks JSON. Declaring it keeps the OpenAPI contract to one media type per
-        // operation (no text/plain variants) so the generated client has one method per endpoint.
-        options.Filters.Add(new ProducesAttribute("application/json"));
-        options.Filters.Add(new ConsumesAttribute("application/json"));
-    })
-    .AddJsonOptions(o =>
-    {
-        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
+builder.Services.AddApiControllers();
 
 // Uncaught exceptions and automatic model-validation failures both become JSON problem details
 // carrying a top-level "message" (the error shape the SPA already reads).
@@ -219,6 +207,11 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHealthChecks("/health");
+
+// Unknown GET/HEAD /api paths 404 instead of index.html. Restricted to GET/HEAD so a wrong method
+// on a real API route still returns 405 rather than 404.
+app.MapMethods("/api/{**slug}", [HttpMethods.Get, HttpMethods.Head], () => Results.NotFound())
+    .ExcludeFromDescription();
 
 // All non-API routes fall back to index.html so Angular handles client-side routing.
 app.MapFallbackToFile("index.html");
