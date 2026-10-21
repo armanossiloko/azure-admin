@@ -1392,6 +1392,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "concurrencyStamp",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {

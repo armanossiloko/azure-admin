@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Net;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 
 namespace AzureAdmin.API.Infrastructure;
 
@@ -70,9 +73,16 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         ArgumentException ex when IsThrownByApplication(ex) => (StatusCodes.Status400BadRequest, "Bad request", ex.Message),
         InvalidOperationException ex when IsThrownByApplication(ex) => (StatusCodes.Status400BadRequest, "Bad request", ex.Message),
 
-        // Azure DevOps (or another upstream) rejected or failed the call.
+        // Azure DevOps timed out or the circuit breaker is open (AzureDevOpsHttp translates both to
+        // HttpRequestException with 504/503; the raw Polly exceptions are a fallback for other callers).
+        HttpRequestException { StatusCode: HttpStatusCode.GatewayTimeout } ex => (StatusCodes.Status504GatewayTimeout, "Upstream request timed out", ex.Message),
+        HttpRequestException { StatusCode: HttpStatusCode.ServiceUnavailable, InnerException: BrokenCircuitException } ex => (StatusCodes.Status503ServiceUnavailable, "Upstream temporarily unavailable", ex.Message),
+        TimeoutRejectedException or TaskCanceledException => (StatusCodes.Status504GatewayTimeout, "Upstream request timed out", "The upstream request timed out. Try again."),
+        BrokenCircuitException => (StatusCodes.Status503ServiceUnavailable, "Upstream temporarily unavailable", "The upstream service is failing repeatedly; calls are paused briefly. Try again in a minute."),
+
+        // Azure DevOps (or another upstream) rejected or failed the call. AzureDevOpsHttp keeps these messages
+        // short (Azure DevOps' own error text, never the raw body).
         HttpRequestException ex => (StatusCodes.Status502BadGateway, "Upstream request failed", ex.Message),
-        TaskCanceledException => (StatusCodes.Status504GatewayTimeout, "Upstream request timed out", "The upstream request timed out. Try again."),
 
         DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Conflict", "The record was changed by someone else. Reload and try again."),
 

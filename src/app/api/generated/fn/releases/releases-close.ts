@@ -11,12 +11,14 @@ import { ReleaseSummaryDto } from '../../models/release-summary-dto';
 
 export interface ReleasesClose$Params {
   id: string;
+  concurrencyStamp?: string;
 }
 
 export function releasesClose(http: HttpClient, rootUrl: string, params: ReleasesClose$Params, context?: HttpContext): Observable<StrictHttpResponse<ReleaseSummaryDto>> {
   const rb = new RequestBuilder(rootUrl, releasesClose.PATH, 'post');
   if (params) {
     rb.path('id', params.id, {});
+    rb.query('concurrencyStamp', params.concurrencyStamp, {});
   }
 
   return http.request(

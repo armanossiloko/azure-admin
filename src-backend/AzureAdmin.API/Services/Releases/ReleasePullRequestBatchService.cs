@@ -19,6 +19,7 @@ public sealed class ReleasePullRequestBatchService
     private readonly NotificationService _notifications;
     private readonly OutboundWebhookPublisher _webhooks;
     private readonly IAzureDevOpsPatResolver _patResolver;
+    private readonly ILogger<ReleasePullRequestBatchService> _logger;
 
     public ReleasePullRequestBatchService(
         ApplicationDbContext db,
@@ -27,9 +28,11 @@ public sealed class ReleasePullRequestBatchService
         ReleaseCommitNotesService commitNotes,
         NotificationService notifications,
         OutboundWebhookPublisher webhooks,
-        IAzureDevOpsPatResolver patResolver)
+        IAzureDevOpsPatResolver patResolver,
+        ILogger<ReleasePullRequestBatchService> logger)
     {
         _db = db;
+        _logger = logger;
         _ado = ado;
         _currentUser = currentUser;
         _patResolver = patResolver;
@@ -514,7 +517,8 @@ public sealed class ReleasePullRequestBatchService
     }
 
     private static bool IsUnresolvedBranch(HttpRequestException ex) =>
-        ex.Message.Contains("could not be resolved", StringComparison.OrdinalIgnoreCase)
+        ex.Data[AzureDevOpsHttp.TypeKeyDataKey] is "GitUnresolvableToCommitException"
+        || ex.Message.Contains("could not be resolved", StringComparison.OrdinalIgnoreCase)
         || ex.Message.Contains("GitUnresolvableToCommitException", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -675,10 +679,11 @@ public sealed class ReleasePullRequestBatchService
     {
         var userId = _currentUser.GetRequiredUserId();
 
-        var releaseTitle = await _db.Releases.AsNoTracking()
+        var release = await _db.Releases.AsNoTracking()
             .Where(r => r.Id == releaseId)
-            .Select(r => r.Title)
-            .FirstOrDefaultAsync(cancellationToken) ?? "Release";
+            .Select(r => new { r.Title, r.CreatedByUserId })
+            .FirstOrDefaultAsync(cancellationToken);
+        var releaseTitle = release?.Title ?? "Release";
 
         var prs = await _db.ReleasePullRequests
             .Where(pr => pr.ReleaseId == releaseId && pr.Phase == phase)
@@ -744,7 +749,9 @@ public sealed class ReleasePullRequestBatchService
 
                 pr.Status = ReleasePullRequestStatus.Completed;
                 await _db.SaveChangesAsync(cancellationToken);
-                await NotifyPrMergedAsync(releaseId, releaseTitle, pr, repo, cancellationToken);
+                await NotifyPrMergedAsync(
+                    MergeNotificationRecipient(pr.CreatedByUserId, release?.CreatedByUserId, fallback: userId),
+                    releaseId, releaseTitle, pr, repo, cancellationToken);
                 completedIds.Add(pr.Id);
 
                 results.Add(new CompletedPullRequestResult(
@@ -780,6 +787,7 @@ public sealed class ReleasePullRequestBatchService
             phase,
             onlyActive: false,
             userFor: _ => userId,
+            fallbackNotificationRecipient: userId,
             maxConcurrency: DefaultStatusLookupConcurrency,
             cancellationToken);
     }
@@ -794,19 +802,25 @@ public sealed class ReleasePullRequestBatchService
     /// completed and abandoned PRs are not re-checked, which keeps the scheduled sync cheap.
     /// Azure DevOps lookups run concurrently (bounded by <paramref name="maxConcurrency"/>); all DbContext
     /// work stays sequential.
+    /// The PAT used for a lookup says nothing about who should hear about the merge: "PR merged" goes to
+    /// the user who opened the PR, else the release creator, else <paramref name="fallbackNotificationRecipient"/>
+    /// (the caller for interactive refreshes; null in the background sync, which then skips the in-app
+    /// notification while chat webhooks still fire).
     /// </summary>
     public async Task<IReadOnlyList<ReleasePullRequestStatusResult>> RefreshPullRequestStatusesAsync(
         Guid releaseId,
         ReleasePrPhase? phase,
         bool onlyActive,
         Func<ReleasePullRequest, Guid?> userFor,
+        Guid? fallbackNotificationRecipient,
         int maxConcurrency,
         CancellationToken cancellationToken)
     {
-        var releaseTitle = await _db.Releases.AsNoTracking()
+        var release = await _db.Releases.AsNoTracking()
             .Where(r => r.Id == releaseId)
-            .Select(r => r.Title)
-            .FirstOrDefaultAsync(cancellationToken) ?? "Release";
+            .Select(r => new { r.Title, r.CreatedByUserId })
+            .FirstOrDefaultAsync(cancellationToken);
+        var releaseTitle = release?.Title ?? "Release";
 
         var query = _db.ReleasePullRequests.Where(pr => pr.ReleaseId == releaseId);
         if (phase is { } p)
@@ -880,7 +894,7 @@ public sealed class ReleasePullRequestBatchService
         }));
 
         var newlyCompleted = new List<ReleasePullRequest>();
-        foreach (var (pr, userId, status, ok) in fetched)
+        foreach (var (pr, _, status, ok) in fetched)
         {
             if (!ok)
                 continue;
@@ -889,13 +903,18 @@ public sealed class ReleasePullRequestBatchService
             pr.Status = ReleasePullRequestStatusMapper.Map(status);
             if (previous != ReleasePullRequestStatus.Completed &&
                 pr.Status == ReleasePullRequestStatus.Completed)
-            {
-                await _db.SaveChangesAsync(cancellationToken);
-                await NotifyPrMergedAsync(userId, releaseId, releaseTitle, pr, pr.RegisteredRepository, cancellationToken);
                 newlyCompleted.Add(pr);
-            }
         }
+
+        // Persist every status first; notifications are best effort and must not cost a status update.
         await _db.SaveChangesAsync(cancellationToken);
+
+        foreach (var pr in newlyCompleted)
+        {
+            await NotifyPrMergedAsync(
+                MergeNotificationRecipient(pr.CreatedByUserId, release?.CreatedByUserId, fallbackNotificationRecipient),
+                releaseId, releaseTitle, pr, pr.RegisteredRepository, cancellationToken);
+        }
 
         await NotifyPhaseCompleteWebhooksAsync(releaseId, prs, newlyCompleted, cancellationToken);
         await PromoteReleaseIfHasCompletedPullRequestAsync(releaseId, cancellationToken);
@@ -936,31 +955,41 @@ public sealed class ReleasePullRequestBatchService
         return new WebhookPrLine(pr.Team.Name, name, pr.AzureDevOpsPullRequestId, pr.Url, failure);
     }
 
-    private Task NotifyPrMergedAsync(
-        Guid releaseId,
-        string releaseTitle,
-        ReleasePullRequest pr,
-        RegisteredRepository repo,
-        CancellationToken cancellationToken) =>
-        NotifyPrMergedAsync(_currentUser.GetRequiredUserId(), releaseId, releaseTitle, pr, repo, cancellationToken);
+    /// <summary>
+    /// Who gets the in-app "PR merged" notification: the user who opened the PR, else the release creator,
+    /// else <paramref name="fallback"/>. Never the user whose PAT happened to be used for the status lookup.
+    /// </summary>
+    internal static Guid? MergeNotificationRecipient(Guid? pullRequestCreator, Guid? releaseCreator, Guid? fallback) =>
+        pullRequestCreator ?? releaseCreator ?? fallback;
 
+    /// <summary>Best effort: the merge itself is already persisted, so a failed notification is only logged.</summary>
     private async Task NotifyPrMergedAsync(
-        Guid userId,
+        Guid? recipient,
         Guid releaseId,
         string releaseTitle,
         ReleasePullRequest pr,
         RegisteredRepository repo,
         CancellationToken cancellationToken)
     {
+        if (recipient is not { } userId)
+            return;
+
         var label = string.IsNullOrWhiteSpace(repo.ServiceName) ? repo.RepositoryIdOrName : repo.ServiceName;
-        await _notifications.NotifyOnceAsync(
-            userId,
-            kind: "pr_merged",
-            dedupeKey: $"pr_merged:{pr.Id}",
-            title: $"PR merged — {label}",
-            body: $"#{pr.AzureDevOpsPullRequestId} on \"{releaseTitle}\" is completed in Azure DevOps.",
-            href: $"/releases/{releaseId}",
-            cancellationToken);
+        try
+        {
+            await _notifications.NotifyOnceAsync(
+                userId,
+                kind: "pr_merged",
+                dedupeKey: $"pr_merged:{pr.Id}",
+                title: $"PR merged — {label}",
+                body: $"#{pr.AzureDevOpsPullRequestId} on \"{releaseTitle}\" is completed in Azure DevOps.",
+                href: $"/releases/{releaseId}",
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not record the merge notification for pull request {PullRequestId}.", pr.Id);
+        }
     }
 
     private async Task NotifyBatchFailuresAsync(

@@ -2,7 +2,6 @@ using AzureAdmin.API.Configuration;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
 using AzureAdmin.API.Models;
-using AzureAdmin.API.Services.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -32,38 +31,44 @@ public sealed class PullRequestStatusSyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var options = _options.CurrentValue;
-        if (!options.Enabled)
-        {
-            _logger.LogInformation("Pull request status sync is disabled (PullRequestSync:Enabled=false).");
-            return;
-        }
-
+        var initial = _options.CurrentValue;
         _logger.LogInformation(
-            "Pull request status sync enabled: every {Interval} min, first run in {Delay} s.",
-            options.IntervalMinutes, options.InitialDelaySeconds);
+            "Pull request status sync {State}: every {Interval} min, first check in {Delay} s.",
+            initial.Enabled ? "enabled" : "disabled", initial.IntervalMinutes, initial.InitialDelaySeconds);
 
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(options.InitialDelaySeconds), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(initial.InitialDelaySeconds), stoppingToken);
 
+            var wasEnabled = initial.Enabled;
             while (!stoppingToken.IsCancellationRequested)
             {
-                try
+                // Read every interval so PullRequestSync:Enabled can be flipped without a restart.
+                var options = _options.CurrentValue;
+                if (options.Enabled != wasEnabled)
                 {
-                    var summary = await RunOnceAsync(stoppingToken);
-                    if (summary.ReleasesScanned > 0)
-                        _logger.LogInformation(
-                            "Pull request status sync: {Releases} release(s), {PullRequests} PR(s) checked, {Changed} status change(s), {Skipped} skipped (no PAT).",
-                            summary.ReleasesScanned, summary.PullRequestsChecked, summary.StatusChanges, summary.SkippedNoPat);
+                    _logger.LogInformation("Pull request status sync {State}.", options.Enabled ? "enabled" : "disabled");
+                    wasEnabled = options.Enabled;
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+
+                if (options.Enabled)
                 {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Pull request status sync run failed; will retry next interval.");
+                    try
+                    {
+                        var summary = await RunOnceAsync(stoppingToken);
+                        if (summary.ReleasesScanned > 0)
+                            _logger.LogInformation(
+                                "Pull request status sync: {Releases} release(s), {PullRequests} PR(s) checked, {Changed} status change(s), {Skipped} skipped (no PAT), {Failed} release(s) failed.",
+                                summary.ReleasesScanned, summary.PullRequestsChecked, summary.StatusChanges, summary.SkippedNoPat, summary.ReleasesFailed);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Pull request status sync run failed; will retry next interval.");
+                    }
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(_options.CurrentValue.IntervalMinutes), stoppingToken);
@@ -95,15 +100,12 @@ public sealed class PullRequestStatusSyncService : BackgroundService
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
-            // Byte-array length does not translate to SQL; the empty-PAT check happens client-side
-            // (one small row per user and organization).
-            holders = (await db.AzureDevOpsPatCredentials.AsNoTracking()
-                    .Where(c => c.PatExpiresAt == null || c.PatExpiresAt > now)
-                    .Select(c => new { c.UserId, c.OrganizationKey, c.UpdatedAt, c.ProtectedPat })
-                    .ToListAsync(cancellationToken))
-                .Where(c => c.ProtectedPat.Length > 0)
+            // Only who holds an unexpired PAT for which organization; the encrypted PAT itself is resolved
+            // later, once per user and organization actually used. Saving a PAT rejects empty values.
+            holders = await db.AzureDevOpsPatCredentials.AsNoTracking()
+                .Where(c => c.PatExpiresAt == null || c.PatExpiresAt > now)
                 .Select(c => new PatHolder(c.UserId, c.OrganizationKey, c.UpdatedAt))
-                .ToList();
+                .ToListAsync(cancellationToken);
         }
 
         var summary = new SyncSummary();
@@ -114,48 +116,68 @@ public sealed class PullRequestStatusSyncService : BackgroundService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var scope = _scopeFactory.CreateScope();
-            var batch = scope.ServiceProvider.GetRequiredService<ReleasePullRequestBatchService>();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            var before = await db.ReleasePullRequests.AsNoTracking()
-                .Where(pr => pr.ReleaseId == releaseId)
-                .ToDictionaryAsync(pr => pr.Id, pr => pr.Status, cancellationToken);
-
-            var skipped = 0;
-            var checkedCount = 0;
-
-            Guid? UserFor(ReleasePullRequest pr)
+            // One broken release (bad data, a database error) must not stop the others until the next interval.
+            try
             {
-                var user = PullRequestSyncUserPicker.Pick(pr.CreatedByUserId, pr.RegisteredRepository.AzureDevOpsOrganization, holders);
-                if (user is null)
-                    skipped++;
-                else
-                    checkedCount++;
-                return user;
+                await SyncReleaseAsync(releaseId, holders, maxConcurrency, summary, cancellationToken);
             }
-
-            // Anything on this path that still asks for the "current user" sees a real PAT holder
-            // instead of throwing; the per-PR choice above is what actually talks to Azure DevOps.
-            IReadOnlyList<ReleasePullRequestStatusResult> results;
-            using (AmbientUser.Impersonate(holders.Count > 0 ? holders[0].UserId : Guid.Empty))
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                results = await batch.RefreshPullRequestStatusesAsync(
-                    releaseId,
-                    phase: null,
-                    onlyActive: true,
-                    userFor: UserFor,
-                    maxConcurrency,
-                    cancellationToken);
+                throw;
             }
-
-            summary.ReleasesScanned++;
-            summary.PullRequestsChecked += checkedCount;
-            summary.SkippedNoPat += skipped;
-            summary.StatusChanges += results.Count(r => before.TryGetValue(r.PullRequestId, out var prev) && prev != r.Status);
+            catch (Exception ex)
+            {
+                summary.ReleasesFailed++;
+                _logger.LogError(ex, "Pull request status sync failed for release {ReleaseId}; continuing with the next release.", releaseId);
+            }
         }
 
         return summary;
+    }
+
+    private async Task SyncReleaseAsync(
+        Guid releaseId,
+        IReadOnlyList<PatHolder> holders,
+        int maxConcurrency,
+        SyncSummary summary,
+        CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var batch = scope.ServiceProvider.GetRequiredService<ReleasePullRequestBatchService>();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var before = await db.ReleasePullRequests.AsNoTracking()
+            .Where(pr => pr.ReleaseId == releaseId)
+            .ToDictionaryAsync(pr => pr.Id, pr => pr.Status, cancellationToken);
+
+        var skipped = 0;
+        var checkedCount = 0;
+
+        Guid? UserFor(ReleasePullRequest pr)
+        {
+            var user = PullRequestSyncUserPicker.Pick(pr.CreatedByUserId, pr.RegisteredRepository.AzureDevOpsOrganization, holders);
+            if (user is null)
+                skipped++;
+            else
+                checkedCount++;
+            return user;
+        }
+
+        // No HTTP request and no impersonation here: the PAT comes from UserFor, and merge notifications go
+        // to the PR/release creator (fallback null), so nothing on this path needs a "current user".
+        var results = await batch.RefreshPullRequestStatusesAsync(
+            releaseId,
+            phase: null,
+            onlyActive: true,
+            userFor: UserFor,
+            fallbackNotificationRecipient: null,
+            maxConcurrency,
+            cancellationToken);
+
+        summary.ReleasesScanned++;
+        summary.PullRequestsChecked += checkedCount;
+        summary.SkippedNoPat += skipped;
+        summary.StatusChanges += results.Count(r => before.TryGetValue(r.PullRequestId, out var prev) && prev != r.Status);
     }
 
     public sealed class SyncSummary
@@ -164,5 +186,6 @@ public sealed class PullRequestStatusSyncService : BackgroundService
         public int PullRequestsChecked { get; set; }
         public int StatusChanges { get; set; }
         public int SkippedNoPat { get; set; }
+        public int ReleasesFailed { get; set; }
     }
 }

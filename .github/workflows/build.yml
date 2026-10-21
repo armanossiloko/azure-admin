@@ -42,9 +42,11 @@ jobs:
       # The committed contract and generated client must match the controllers.
       - name: API contract and generated client are up to date
         run: |
-          if ! git diff --quiet -- openapi src/app/api/generated; then
+          # git status, not git diff: a new endpoint or DTO adds generated files that are untracked.
+          changes=$(git status --porcelain -- openapi src/app/api/generated)
+          if [ -n "$changes" ]; then
             echo "::error::openapi/ or src/app/api/generated/ is stale. Build the backend (dotnet build src-backend/AzureAdmin.API) and commit the result."
-            git --no-pager diff --stat -- openapi src/app/api/generated
+            echo "$changes"
             exit 1
           fi
 

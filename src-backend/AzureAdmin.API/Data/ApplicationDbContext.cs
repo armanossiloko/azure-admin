@@ -138,6 +138,10 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser, Id
                 .WithMany(x => x.ReleasePullRequests)
                 .HasForeignKey(x => x.RegisteredRepositoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ReleaseRepositoryCommitNotes>(e =>

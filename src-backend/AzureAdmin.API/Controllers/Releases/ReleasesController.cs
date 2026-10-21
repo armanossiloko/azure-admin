@@ -398,14 +398,8 @@ public sealed class ReleasesController : ControllerBase
         if (release is null)
             return NotFound();
 
-        if (request.ConcurrencyStamp is { } expectedStamp)
-        {
-            if (expectedStamp != release.ConcurrencyStamp)
-                return Conflict(new { message = StaleReleaseMessage });
-
-            // Also guard the window between this read and the write: EF compares against the original value.
-            _db.Entry(release).Property(r => r.ConcurrencyStamp).OriginalValue = expectedStamp;
-        }
+        if (IsStale(release, request.ConcurrencyStamp))
+            return Conflict(new { message = StaleReleaseMessage });
 
         if (request.Title is not null)
         {
@@ -541,18 +535,35 @@ public sealed class ReleasesController : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = releaseId }, new ReleaseTeamDto(rt.Id, request.TeamId, teamName));
     }
 
+    /// <param name="concurrencyStamp">
+    /// Optional: the stamp the client last read. When set and the release has changed since, the close is
+    /// rejected with 409 Conflict, like <see cref="Update"/>.
+    /// </param>
     [HttpPost("{id:guid}/close")]
-    public async Task<ActionResult<ReleaseSummaryDto>> Close(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ReleaseSummaryDto>> Close(
+        Guid id,
+        [FromQuery] Guid? concurrencyStamp,
+        CancellationToken cancellationToken)
     {
         var release = await _db.Releases.FindAsync([id], cancellationToken);
         if (release is null)
             return NotFound();
 
+        if (IsStale(release, concurrencyStamp))
+            return Conflict(new { message = StaleReleaseMessage });
+
         if (release.Status is ReleaseLifecycleStatus.Completed or ReleaseLifecycleStatus.Archived)
             return BadRequest(new { message = "This release is already closed." });
 
         release.Status = ReleaseLifecycleStatus.Completed;
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict(new { message = StaleReleaseMessage });
+        }
 
         return Ok(await LoadSummaryAsync(release.Id, cancellationToken));
     }
@@ -567,6 +578,22 @@ public sealed class ReleasesController : ControllerBase
         _db.Releases.Remove(release);
         await _db.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// True when the client sent a stamp that no longer matches. Otherwise, when a stamp was sent, makes EF
+    /// compare against it on save, which also catches a change landing between this read and the write.
+    /// No stamp means no check (older clients).
+    /// </summary>
+    private bool IsStale(Release release, Guid? expectedStamp)
+    {
+        if (expectedStamp is not { } expected)
+            return false;
+        if (expected != release.ConcurrencyStamp)
+            return true;
+
+        _db.Entry(release).Property(r => r.ConcurrencyStamp).OriginalValue = expected;
+        return false;
     }
 
     private Task<ReleaseSummaryDto> LoadSummaryAsync(Guid id, CancellationToken cancellationToken) =>

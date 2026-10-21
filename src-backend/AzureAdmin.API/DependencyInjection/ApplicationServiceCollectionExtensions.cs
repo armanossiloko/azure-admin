@@ -20,6 +20,7 @@ public static class ApplicationServiceCollectionExtensions
         services.Configure<AzureDevOpsOptions>(configuration.GetSection("AzureDevOps"));
         services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
         services.Configure<BrandingOptions>(configuration.GetSection(BrandingOptions.SectionName));
+        services.Configure<AppOptions>(configuration.GetSection(AppOptions.SectionName));
         services.AddOptions<PostgresOptions>()
             .Bind(configuration.GetSection(PostgresOptions.SectionName))
             .ValidateDataAnnotations()
@@ -69,10 +70,13 @@ public static class ApplicationServiceCollectionExtensions
     /// 5xx/408/429 honouring Retry-After, attempt + total timeouts, circuit breaker). Writes are only
     /// retried on 429/503, which Azure DevOps returns before processing the request, so a retried
     /// create never opens a duplicate pull request.
+    /// HttpClient's own timeout is disabled on both: the pipelines own timing (the 100 s default would
+    /// otherwise cut the 120 s total budget short and surface as a bare cancellation).
     /// </summary>
     private static void AddAzureDevOpsHttpClients(IServiceCollection services)
     {
         services.AddHttpClient(AzureDevOpsClient.ReadHttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddStandardResilienceHandler(options =>
             {
                 options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(30);
@@ -86,9 +90,12 @@ public static class ApplicationServiceCollectionExtensions
             });
 
         services.AddHttpClient(AzureDevOpsClient.WriteHttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = Timeout.InfiniteTimeSpan)
             .AddResilienceHandler("azure-devops-write", builder =>
             {
                 builder
+                    // Total budget across retries (outermost), then retry, then the per-attempt timeout.
+                    .AddTimeout(TimeSpan.FromSeconds(180))
                     .AddRetry(new HttpRetryStrategyOptions
                     {
                         MaxRetryAttempts = 3,

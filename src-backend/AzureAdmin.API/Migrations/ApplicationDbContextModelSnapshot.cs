@@ -364,6 +364,8 @@ namespace AzureAdmin.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedByUserId");
+
                     b.HasIndex("RegisteredRepositoryId");
 
                     b.HasIndex("Status");
@@ -826,6 +828,11 @@ namespace AzureAdmin.API.Migrations
 
             modelBuilder.Entity("AzureAdmin.API.Models.ReleasePullRequest", b =>
                 {
+                    b.HasOne("AzureAdmin.API.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("AzureAdmin.API.Models.RegisteredRepository", "RegisteredRepository")
                         .WithMany("ReleasePullRequests")
                         .HasForeignKey("RegisteredRepositoryId")

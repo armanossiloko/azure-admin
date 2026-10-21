@@ -17,11 +17,7 @@ public sealed class CurrentUser : ICurrentUser
         get
         {
             var id = _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (Guid.TryParse(id, out var guid))
-                return guid;
-
-            // No HTTP request (background sync): fall back to the impersonated user, if any.
-            return AmbientUser.UserId;
+            return Guid.TryParse(id, out var guid) ? guid : null;
         }
     }
 

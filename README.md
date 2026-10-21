@@ -55,7 +55,7 @@ Copy `.env.example` to `.env` for Docker Compose (Postgres, Keycloak, Azure DevO
 
 For local API runs, set `Postgres` and `Keycloak` in `src-backend/AzureAdmin.API/appsettings.json` or via environment variables (`Postgres__Host`, `Keycloak__Authority`, etc.). See `.gitignore` for local secret patterns (`appsettings.*.local.json`, `.env`).
 
-Optional: `PullRequestSync__Enabled`, `PullRequestSync__IntervalMinutes` (background PR status sync; see [docs/setup.md](docs/setup.md)).
+Optional: `PullRequestSync__Enabled`, `PullRequestSync__IntervalMinutes` (background PR status sync), `App__PublicBaseUrl` (public UI URL for links in chat messages sent by the background sync); see [docs/setup.md](docs/setup.md).
 
 API errors are JSON problem details with a top-level `message` (RFC 7807 fields plus `message` and `traceId`).
 

@@ -17,14 +17,17 @@ public sealed class AzureDevOpsCatalogService
     private readonly IAzureDevOpsPatResolver _patResolver;
     private readonly ICurrentUser _currentUser;
     private readonly AzureDevOpsOptions _options;
+    private readonly ILogger<AzureDevOpsCatalogService> _logger;
 
     public AzureDevOpsCatalogService(
         ApplicationDbContext db,
         IHttpClientFactory httpClientFactory,
         IAzureDevOpsPatResolver patResolver,
         ICurrentUser currentUser,
-        IOptions<AzureDevOpsOptions> options)
+        IOptions<AzureDevOpsOptions> options,
+        ILogger<AzureDevOpsCatalogService> logger)
     {
+        _logger = logger;
         _db = db;
         _httpClientFactory = httpClientFactory;
         _patResolver = patResolver;
@@ -130,10 +133,10 @@ public sealed class AzureDevOpsCatalogService
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.Authorization = PatAuth(pat);
 
-        using var resp = await http.SendAsync(request, cancellationToken);
+        using var resp = await AzureDevOpsHttp.SendAsync(http, request, cancellationToken);
         var text = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps request failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("request", resp, text, _logger);
 
         return text;
     }

@@ -53,4 +53,18 @@ public class AzureDevOpsHttpClientRegistrationTests
 
         Assert.NotNull(client);
     }
+
+    [Theory]
+    [InlineData(AzureDevOpsClient.ReadHttpClientName)]
+    [InlineData(AzureDevOpsClient.WriteHttpClientName)]
+    public void HttpClient_timeout_is_left_to_the_resilience_pipeline(string name)
+    {
+        using var provider = Build();
+        var factory = provider.GetRequiredService<IHttpClientFactory>();
+
+        using var client = factory.CreateClient(name);
+
+        // The 100 s default would end requests before the pipeline's own total timeout.
+        Assert.Equal(Timeout.InfiniteTimeSpan, client.Timeout);
+    }
 }

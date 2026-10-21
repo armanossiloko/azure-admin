@@ -260,8 +260,14 @@ export class ReleaseDetailPage implements OnInit {
       await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release details updated.');
     } catch (e: unknown) {
-      // On a conflict the form stays open with the user's values; saving again applies them on top.
-      if (await this.reportUpdateError(e, rel.id)) this.editStamp = this.release()?.concurrencyStamp ?? null;
+      if ((await this.reportUpdateError(e, rel.id)) && this.release()) {
+        // Their version is now in the form (title, sprint, and a status that is still a valid choice);
+        // the user reapplies their change on top of it and saves again.
+        this.startEditMeta();
+        this.error.set(
+          'Someone else changed this release while you were editing. The form now shows their version; reapply your changes and save again.'
+        );
+      }
     } finally {
       this.savingMeta.set(false);
     }
@@ -331,11 +337,12 @@ export class ReleaseDetailPage implements OnInit {
     this.closingRelease.set(true);
     this.error.set(null);
     try {
-      await this.releasesApi.releasesClose({ id: rel.id });
-      this.release.update((r) => (r ? { ...r, status: 'Completed' } : r));
+      await this.releasesApi.releasesClose({ id: rel.id, concurrencyStamp: rel.concurrencyStamp ?? undefined });
+      // Reload rather than patching the status locally: closing rotates the concurrency stamp.
+      await this.loadRelease(rel.id, { syncStatuses: false });
       this.copyMessage.set('Release closed.');
     } catch (e: unknown) {
-      this.error.set(apiErrorMessage(e));
+      await this.reportUpdateError(e, rel.id);
     } finally {
       this.closingRelease.set(false);
     }

@@ -1,5 +1,8 @@
+using System.Net;
 using AzureAdmin.API.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
 
 namespace AzureAdmin.API.Tests;
 
@@ -88,6 +91,54 @@ public class ApiExceptionHandlerTests
         var (status, _, _) = ApiExceptionHandler.Map(new TaskCanceledException());
 
         Assert.Equal(504, status);
+    }
+
+    [Fact]
+    public void Polly_timeout_maps_to_504()
+    {
+        var (status, _, _) = ApiExceptionHandler.Map(new TimeoutRejectedException());
+
+        Assert.Equal(504, status);
+    }
+
+    [Fact]
+    public void Open_circuit_maps_to_503()
+    {
+        var (status, _, _) = ApiExceptionHandler.Map(new BrokenCircuitException());
+
+        Assert.Equal(503, status);
+    }
+
+    [Fact]
+    public void Translated_azure_devops_timeout_maps_to_504_with_its_message()
+    {
+        var ex = new HttpRequestException("Azure DevOps did not respond in time. Try again.", new TimeoutRejectedException(), HttpStatusCode.GatewayTimeout);
+
+        var (status, _, message) = ApiExceptionHandler.Map(ex);
+
+        Assert.Equal(504, status);
+        Assert.Equal(ex.Message, message);
+    }
+
+    [Fact]
+    public void Translated_open_circuit_maps_to_503()
+    {
+        var ex = new HttpRequestException("paused", new BrokenCircuitException(), HttpStatusCode.ServiceUnavailable);
+
+        var (status, _, _) = ApiExceptionHandler.Map(ex);
+
+        Assert.Equal(503, status);
+    }
+
+    [Fact]
+    public void Azure_devops_503_response_without_open_circuit_stays_a_502()
+    {
+        // Azure DevOps itself answering 503 is an upstream failure, not our breaker pausing calls.
+        var ex = new HttpRequestException("Azure DevOps get PR failed (503).", null, HttpStatusCode.ServiceUnavailable);
+
+        var (status, _, _) = ApiExceptionHandler.Map(ex);
+
+        Assert.Equal(502, status);
     }
 
     [Fact]

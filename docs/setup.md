@@ -62,17 +62,23 @@ Azure Admin can POST one summary message for **dev → master created**, **dev �
 
 The webhook URL is encrypted at rest and only a masked preview is shown after save. Delivery failures are recorded on the destination and never fail PR creation.
 
+Messages link to the release (`{{release_url}}`). Set `App__PublicBaseUrl` to the public URL of the UI (for example `https://azure-admin.example.com`) so messages sent by the background status sync, which run outside any request, carry that link too; without it those messages have no link, and messages triggered from the UI use the address the browser called. In background messages `{{actor}}` is `Automatic status sync`.
+
 ## Background pull request status sync
 
 The API re-checks every still-active pull request on Draft/Active releases against Azure DevOps on a timer (default every 5 minutes, first run 30 s after startup). Merged PRs therefore show up, in-app "PR merged" notifications and phase-complete chat messages fire, and dashboard counts stay current without anyone opening the release page or clicking **Check status**.
 
 PATs are per user, so each PR is checked with the PAT of the user who opened it; for PRs opened before this feature (or when that user's PAT expired) the sync uses whichever user most recently saved a valid PAT for that organization. PRs in an organization nobody holds a PAT for keep their last known status until someone refreshes manually.
 
+> **Shared PAT use.** Saving a PAT for an organization means the background sync may use it (read-only status lookups) for any team's pull requests in that organization, not only your own. If that is not acceptable, disable the sync and rely on manual **Check status**.
+
+The PAT used for a lookup does not decide who is told about a merge: the in-app "PR merged" notification goes to the user who opened the PR, or for older PRs to the release creator. When neither is known the background sync skips the in-app notification; chat webhooks still fire. A sync problem with one release is logged and the remaining releases are still checked.
+
 Configuration (`PullRequestSync` section; env vars `PullRequestSync__*`):
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `Enabled` | `true` | Set `false` to go back to manual refresh only |
+| `Enabled` | `true` | Set `false` to go back to manual refresh only; re-read every interval, so it can be toggled without a restart |
 | `IntervalMinutes` | `5` | 1 to 1440 |
 | `InitialDelaySeconds` | `30` | Lets migrations finish before the first run |
 | `MaxConcurrency` | `4` | Concurrent Azure DevOps lookups per release |
@@ -81,7 +87,9 @@ With Helm, pass these through `extraEnv` (for example `PullRequestSync__Interval
 
 ## Azure DevOps call resilience
 
-All calls to `dev.azure.com` go through two named HTTP clients. Reads retry up to three times with exponential backoff on 5xx, 408, and 429 (honouring `Retry-After`), with a 30 s per-attempt and 120 s total timeout plus a circuit breaker. Writes (create PR, complete PR, delete branch) are retried only on 429/503, which Azure DevOps returns before processing the request, so a retry can never open a duplicate pull request.
+All calls to `dev.azure.com` go through two named HTTP clients. Reads retry up to three times with exponential backoff on 5xx, 408, and 429 (honouring `Retry-After`), with a 30 s per-attempt and 120 s total timeout plus a circuit breaker. Writes (create PR, complete PR, delete branch) are retried only on 429/503, which Azure DevOps returns before processing the request, so a retry can never open a duplicate pull request; each attempt times out after 60 s, and all attempts together after 180 s.
+
+When Azure DevOps times out the API answers **504**; when the circuit breaker has paused calls after repeated failures it answers **503**. In batch operations these count as a failure for that repository or pull request and the rest of the batch continues. Error messages carry Azure DevOps' own error text (for example `TF401179: An active pull request … already exists`), never the raw response body, which is logged instead.
 
 ## First-run checklist
 
@@ -107,7 +115,7 @@ The dashboard onboarding checklist mirrors these steps.
 
 Commit notes can be refreshed from ADO and exported as markdown. Conventional-commit grouping and Jira link extraction are controlled in global **Settings**.
 
-Each release records who created it and when it was last edited (shown on the list and detail pages; releases created before this was tracked show no creator). Edits are guarded by a concurrency stamp: if someone else changed the release after you opened it, your save is rejected with **409 Conflict**, the page reloads their version, and you can reapply your change. API clients opt in by sending the `concurrencyStamp` they read back in `PATCH /api/releases/{id}`; requests without it are applied as before.
+Each release records who created it and when it was last edited (shown on the list and detail pages; releases created before this was tracked show no creator). Edits are guarded by a concurrency stamp: if someone else changed the release after you opened it, your save is rejected with **409 Conflict** and the page reloads their version (into the edit form, if it was open) so you can reapply your change. API clients opt in by sending the `concurrencyStamp` they read back, in the body of `PATCH /api/releases/{id}` or as `?concurrencyStamp=` on `POST /api/releases/{id}/close`; requests without it are applied as before.
 
 ## Organization switcher
 

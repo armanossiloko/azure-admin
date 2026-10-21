@@ -28,15 +28,18 @@ public sealed class AzureDevOpsClient
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AzureDevOpsOptions _options;
     private readonly IAzureDevOpsPatResolver _patResolver;
+    private readonly ILogger<AzureDevOpsClient> _logger;
 
     public AzureDevOpsClient(
         IHttpClientFactory httpClientFactory,
         IOptions<AzureDevOpsOptions> options,
-        IAzureDevOpsPatResolver patResolver)
+        IAzureDevOpsPatResolver patResolver,
+        ILogger<AzureDevOpsClient> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _patResolver = patResolver;
+        _logger = logger;
     }
 
     public async Task<AzureDevOpsCreatePullRequestResponse> CreatePullRequestAsync(
@@ -70,7 +73,7 @@ public sealed class AzureDevOpsClient
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps PR create failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("PR create", resp, respText, _logger);
 
         var parsed = JsonSerializer.Deserialize<AzureDevOpsCreatePullRequestResponse>(respText, CaseInsensitive);
 
@@ -120,7 +123,7 @@ public sealed class AzureDevOpsClient
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get PR failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get PR", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -204,7 +207,7 @@ public sealed class AzureDevOpsClient
         using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps commits failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("commits", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         if (!doc.RootElement.TryGetProperty("value", out var arr) || arr.ValueKind != JsonValueKind.Array)
@@ -232,7 +235,7 @@ public sealed class AzureDevOpsClient
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get PR failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get PR", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -284,7 +287,7 @@ public sealed class AzureDevOpsClient
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps PR complete failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("PR complete", resp, respText, _logger);
     }
 
     public async Task<IReadOnlyList<AzureDevOpsGitRef>> ListBranchRefsAsync(
@@ -309,7 +312,7 @@ public sealed class AzureDevOpsClient
             using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
             var text = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException($"Azure DevOps list refs failed ({(int)resp.StatusCode}): {text}");
+                throw AzureDevOpsHttp.Failure("list refs", resp, text, _logger);
 
             using var doc = JsonDocument.Parse(text);
             var root = doc.RootElement;
@@ -371,7 +374,7 @@ public sealed class AzureDevOpsClient
 
         var text = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps get commit failed ({(int)resp.StatusCode}): {text}");
+            throw AzureDevOpsHttp.Failure("get commit", resp, text, _logger);
 
         using var doc = JsonDocument.Parse(text);
         var root = doc.RootElement;
@@ -418,12 +421,13 @@ public sealed class AzureDevOpsClient
         var respText = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"Azure DevOps delete branch failed ({(int)resp.StatusCode}): {respText}");
+            throw AzureDevOpsHttp.Failure("delete branch", resp, respText, _logger);
     }
 
     /// <summary>
     /// Sends one request through the named client. Auth and Accept headers are set per request (not on the
-    /// client) so the pooled handler and its resilience pipeline are shared across users.
+    /// client) so the pooled handler and its resilience pipeline are shared across users. Timeouts and an open
+    /// circuit come back as <see cref="HttpRequestException"/> (see <see cref="AzureDevOpsHttp.SendAsync"/>).
     /// </summary>
     private async Task<HttpResponseMessage> SendAsync(
         string clientName,
@@ -440,7 +444,7 @@ public sealed class AzureDevOpsClient
         if (body is not null)
             request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        return await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+        return await AzureDevOpsHttp.SendAsync(http, request, ct);
     }
 
     private string RepoApiUrl(string organization, string project, string repositoryIdOrName, string path, string? query = null)
