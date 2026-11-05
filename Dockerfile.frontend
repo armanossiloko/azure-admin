@@ -12,6 +12,8 @@ COPY public ./public
 RUN npm run build
 
 FROM nginx:alpine
+# CVE-2026-111497: nginx:alpine can ship brotli-libs older than the fixed 1.2.1 (via libcurl/freetype).
+RUN apk upgrade --no-cache brotli-libs
 COPY nginx.frontend.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/azure-admin/browser /usr/share/nginx/html
 
