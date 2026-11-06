@@ -2102,6 +2102,7 @@
       },
       "BatchCreateReleasePullRequestsRequest": {
         "required": [
+          "autoMergeProdToDev",
           "phase",
           "registeredRepositoryIds",
           "title"
@@ -2136,6 +2137,9 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "autoMergeProdToDev": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -2158,6 +2162,20 @@
             "items": {
               "type": "string"
             }
+          },
+          "alreadyInSyncRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "promotionHeldBackRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2456,6 +2474,14 @@
           "id": {
             "type": "string",
             "format": "uuid",
+            "nullable": true
+          },
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ],
             "nullable": true
           }
         },
@@ -2802,6 +2828,7 @@
       },
       "MultiTeamBatchCreateReleasePullRequestsRequest": {
         "required": [
+          "autoMergeProdToDev",
           "phase",
           "teams",
           "title"
@@ -2835,6 +2862,9 @@
             "items": {
               "$ref": "#/components/schemas/TeamPullRequestBatch"
             }
+          },
+          "autoMergeProdToDev": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -2864,6 +2894,20 @@
             "items": {
               "type": "string"
             }
+          },
+          "alreadyInSyncRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "promotionHeldBackRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false

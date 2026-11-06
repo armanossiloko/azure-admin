@@ -49,6 +49,7 @@
 
 /* ====================== DARK THEME (default) — warm-neutral ===================== */
 :root, [data-theme="dark"] {
+  color-scheme: dark;
   /* Warm-neutral darks */
   --bg: oklch(0.18 0.006 70);          /* app background */
   --bg-2: oklch(0.215 0.006 70);       /* panels, cards */
@@ -105,6 +106,7 @@
 
 /* ====================== DARK BLUE THEME ===================== */
 [data-theme="dark-blue"] {
+  color-scheme: dark;
   /* Cool azure-tinted darks */
   --bg: oklch(0.17 0.035 255);
   --bg-2: oklch(0.205 0.038 255);
@@ -158,6 +160,7 @@
 
 /* ====================== LIGHT THEME ===================== */
 [data-theme="light"] {
+  color-scheme: light;
   --bg: oklch(0.985 0.003 80);
   --bg-2: oklch(1 0 0);
   --bg-3: oklch(0.965 0.004 80);
@@ -681,7 +684,9 @@ button { cursor: pointer; }
 .tbl td.mono { font-family: var(--font-mono); font-size: var(--text-small); color: var(--text-2); }
 .tbl td.muted { color: var(--text-3); }
 .tbl td.right { text-align: right; }
-.tbl td.actions { width: 1%; white-space: nowrap; }
+.tbl td.actions { width: 1%; white-space: nowrap; text-align: right; }
+.tbl td.actions > .btn { vertical-align: middle; }
+.tbl td.actions > .btn + .btn { margin-left: var(--s-2); }
 
 /* ====================== BADGES ====================== */
 .badge {
@@ -763,9 +768,11 @@ button { cursor: pointer; }
 .input.error, .select.error, .textarea.error { border-color: var(--danger); }
 .input.error:focus, .select.error:focus, .textarea.error:focus { box-shadow: 0 0 0 3px var(--danger-soft); }
 .input.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.input-sm { height: 26px; padding: 0 10px; font-size: 12px; border-radius: var(--r-2); }
 .textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 .select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
 .select-sm { width: auto; height: 26px; padding: 0 28px 0 10px; font-size: 12px; border-radius: var(--r-2); background-position: right 8px center; }
+.select option, .select optgroup { background: var(--bg-2); color: var(--text); }
 
 .checkbox, .radio {
   appearance: none;

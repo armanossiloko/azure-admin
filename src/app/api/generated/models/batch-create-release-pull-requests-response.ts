@@ -3,6 +3,8 @@
 
 import { CreatedPullRequestResult } from '../models/created-pull-request-result';
 export interface BatchCreateReleasePullRequestsResponse {
+  alreadyInSyncRepositories?: Array<string> | null;
+  promotionHeldBackRepositories?: Array<string> | null;
   results: Array<CreatedPullRequestResult>;
   skippedDecommissionedRepositories: Array<string>;
 }

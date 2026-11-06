@@ -179,7 +179,7 @@
                     (click)="completeAllPrs(bucket.key)"
                     [disabled]="completingPhase() === bucket.key || !mergeablePullRequestsInPhase(prs, bucket.key).length"
                   >
-                    {{ completingPhase() === bucket.key ? 'Merging…' : 'Complete all (rebase)' }}
+                    {{ completingPhase() === bucket.key ? 'Merging…' : bucket.key === 'backmerge' ? 'Complete all (merge)' : 'Complete all (rebase)' }}
                   </button>
                 }
               </div>

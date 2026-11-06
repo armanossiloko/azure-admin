@@ -39,7 +39,8 @@ type ReleaseForBatchContext = {
 export class ReleaseCreatePage implements OnInit {
   protected readonly sprintLabel = signal(this.defaultSprintLabel());
   protected readonly releaseTitle = signal(`Release sprint ${this.defaultSprintLabel()}`);
-  protected readonly phase = signal<ReleasePrPhase>('DevToMaster');
+  protected readonly phase = signal<'DevToMaster' | 'MasterToProd'>('DevToMaster');
+  protected readonly autoMergeProdToDev = signal(false);
   protected readonly fromBranch = signal('');
   protected readonly toBranch = signal('');
   protected readonly description = signal<string>('');
@@ -53,6 +54,8 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly created = signal<BatchCreateResponse | null>(null);
   protected readonly skippedDecommissioned = signal<string[]>([]);
+  protected readonly alreadyInSync = signal<string[]>([]);
+  protected readonly promotionHeldBack = signal<string[]>([]);
   protected readonly preflightIssues = signal<string[]>([]);
 
   /** When set, PRs are added to this release directly (no find-or-create). */
@@ -67,8 +70,6 @@ export class ReleaseCreatePage implements OnInit {
     const s = this.sprintLabel().trim();
     const label = s || 'sprint ????/??';
     switch (this.phase()) {
-      case 'ProdToDev':
-        return `Release prod into dev - Release ${label}`;
       case 'MasterToProd':
         return `Release master into prod - Release ${label}`;
       default:
@@ -78,19 +79,15 @@ export class ReleaseCreatePage implements OnInit {
 
   protected readonly phaseHint = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'Default branches: prod → dev. Only available when prod is ahead of dev — this must finish before Dev → Master or Master → Prod.';
       case 'MasterToProd':
-        return 'Default branches: master → prod (override below if needed). Requires a completed Dev → Master PR. Blocked while prod or master is ahead of dev.';
+        return 'Default branches: master → prod (override below if needed). Requires a completed Dev → Master PR. Also opens Prod → Dev where prod has commits dev is missing.';
       default:
-        return 'Default branches: dev → master (override below if needed). Blocked while prod or master is ahead of dev — use Prod → Dev first when prod has drifted.';
+        return 'Default branches: dev → master (override below if needed). Also opens Prod → Dev where prod has commits dev is missing.';
     }
   });
 
   protected readonly fromBranchPlaceholder = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'default: prod';
       case 'MasterToProd':
         return 'default: master';
       default:
@@ -100,8 +97,6 @@ export class ReleaseCreatePage implements OnInit {
 
   protected readonly toBranchPlaceholder = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'default: dev';
       case 'MasterToProd':
         return 'default: prod';
       default:
@@ -109,10 +104,19 @@ export class ReleaseCreatePage implements OnInit {
     }
   });
 
+  protected phaseLabel(phase: ReleasePrPhase): string {
+    switch (phase) {
+      case 'ProdToDev':
+        return 'prod → dev';
+      case 'MasterToProd':
+        return 'master → prod';
+      default:
+        return 'dev → master';
+    }
+  }
+
   protected setPhase(v: string): void {
-    if (v === 'ProdToDev') this.phase.set('ProdToDev');
-    else if (v === 'MasterToProd') this.phase.set('MasterToProd');
-    else this.phase.set('DevToMaster');
+    this.phase.set(v === 'MasterToProd' ? 'MasterToProd' : 'DevToMaster');
     this.fromBranch.set('');
     this.toBranch.set('');
   }
@@ -292,6 +296,8 @@ export class ReleaseCreatePage implements OnInit {
     this.error.set(null);
     this.created.set(null);
     this.skippedDecommissioned.set([]);
+    this.alreadyInSync.set([]);
+    this.promotionHeldBack.set([]);
     this.preflightIssues.set([]);
 
     const included = [...this.includedTeamIds()];
@@ -343,7 +349,8 @@ export class ReleaseCreatePage implements OnInit {
         title: this.prTitle(),
         description: this.description().trim() || null,
         sourceBranch: this.fromBranch().trim() || null,
-        targetBranch: this.toBranch().trim() || null
+        targetBranch: this.toBranch().trim() || null,
+        autoMergeProdToDev: this.autoMergeProdToDev()
       };
 
       const teamErrors: string[] = [];
@@ -399,6 +406,8 @@ export class ReleaseCreatePage implements OnInit {
         aggregated.push(...(resp?.results ?? []));
         skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
         teamErrors.push(...(resp?.teamErrors ?? []));
+        this.alreadyInSync.set(resp?.alreadyInSyncRepositories ?? []);
+        this.promotionHeldBack.set(resp?.promotionHeldBackRepositories ?? []);
       } catch (e: unknown) {
         teamErrors.push(apiErrorMessage(e));
       }
