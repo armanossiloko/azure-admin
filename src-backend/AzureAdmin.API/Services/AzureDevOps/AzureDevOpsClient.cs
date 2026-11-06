@@ -80,12 +80,51 @@ public sealed class AzureDevOpsClient
         if (parsed is null)
             throw new InvalidOperationException("Azure DevOps response could not be parsed.");
 
-        // The response does not include a browser URL; construct one.
-        var prUrl =
-            $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_git/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequest/{parsed.PullRequestId}";
-
-        return parsed with { Url = prUrl };
+        return parsed with { Url = PullRequestBrowserUrl(organization, project, repositoryIdOrName, parsed.PullRequestId) };
     }
+
+    /// <summary>The active pull request between two branches, or <c>null</c> when there is none.</summary>
+    public async Task<AzureDevOpsCreatePullRequestResponse?> TryFindActivePullRequestAsync(
+        Guid userId,
+        string organization,
+        string project,
+        string repositoryIdOrName,
+        string sourceRefName,
+        string targetRefName,
+        CancellationToken ct)
+    {
+        var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
+
+        var qs =
+            "searchCriteria.status=active" +
+            $"&searchCriteria.sourceRefName={Uri.EscapeDataString(NormalizeRefName(sourceRefName))}" +
+            $"&searchCriteria.targetRefName={Uri.EscapeDataString(NormalizeRefName(targetRefName))}" +
+            "&$top=1";
+
+        var url = RepoApiUrl(organization, project, repositoryIdOrName, "pullrequests", qs);
+
+        using var resp = await SendAsync(ReadHttpClientName, HttpMethod.Get, url, pat, body: null, ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw AzureDevOpsHttp.Failure("list PRs", resp, text, _logger);
+
+        using var doc = JsonDocument.Parse(text);
+        if (!doc.RootElement.TryGetProperty("value", out var arr)
+            || arr.ValueKind != JsonValueKind.Array
+            || arr.GetArrayLength() == 0)
+            return null;
+
+        var pullRequestId = arr[0].GetProperty("pullRequestId").GetInt32();
+        return new AzureDevOpsCreatePullRequestResponse
+        {
+            PullRequestId = pullRequestId,
+            Url = PullRequestBrowserUrl(organization, project, repositoryIdOrName, pullRequestId)
+        };
+    }
+
+    // Azure DevOps responses do not include a browser URL.
+    private static string PullRequestBrowserUrl(string organization, string project, string repositoryIdOrName, int pullRequestId) =>
+        $"https://dev.azure.com/{Uri.EscapeDataString(organization)}/{Uri.EscapeDataString(project)}/_git/{Uri.EscapeDataString(repositoryIdOrName)}/pullrequest/{pullRequestId}";
 
     /// <summary>
     /// Returns the pull request <c>status</c> field from Azure DevOps (typically <c>active</c>, <c>abandoned</c>, <c>completed</c>),
@@ -170,28 +209,14 @@ public sealed class AzureDevOpsClient
         CancellationToken ct)
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
-        sourceBranch = sourceBranch.Trim();
-        targetBranch = targetBranch.Trim();
 
-        return await FetchCommitsBetweenBranchesAsync(
-            pat, organization, project, repositoryIdOrName, sourceBranch, targetBranch, top, ct);
-    }
-
-    private async Task<IReadOnlyList<AzureDevOpsCommitBrief>> FetchCommitsBetweenBranchesAsync(
-        string pat,
-        string organization,
-        string project,
-        string repositoryIdOrName,
-        string itemBranch,
-        string compareBranch,
-        int top,
-        CancellationToken ct)
-    {
+        // Azure DevOps returns the commits reachable from compareVersion but not from itemVersion,
+        // so the branch whose extra commits we want goes in compareVersion.
         var qs =
             $"$top={top}" +
-            $"&searchCriteria.itemVersion.version={Uri.EscapeDataString(itemBranch)}" +
+            $"&searchCriteria.itemVersion.version={Uri.EscapeDataString(targetBranch.Trim())}" +
             "&searchCriteria.itemVersion.versionType=branch" +
-            $"&searchCriteria.compareVersion.version={Uri.EscapeDataString(compareBranch)}" +
+            $"&searchCriteria.compareVersion.version={Uri.EscapeDataString(sourceBranch.Trim())}" +
             "&searchCriteria.compareVersion.versionType=branch";
 
         var url = RepoApiUrl(organization, project, repositoryIdOrName, "commits", qs);
@@ -257,7 +282,7 @@ public sealed class AzureDevOpsClient
         return new AzureDevOpsPullRequestSnapshot(status, mergeStatus, commitId);
     }
 
-    /// <summary>Completes a pull request using the "rebase and fast-forward" merge strategy (no merge commit).</summary>
+    /// <summary>Completes a pull request with the given Azure DevOps merge strategy.</summary>
     public async Task CompletePullRequestAsync(
         Guid userId,
         string organization,
@@ -265,6 +290,7 @@ public sealed class AzureDevOpsClient
         string repositoryIdOrName,
         int pullRequestId,
         string lastMergeSourceCommitId,
+        string mergeStrategy,
         CancellationToken ct)
     {
         var pat = await _patResolver.ResolvePatForOrganizationAsync(userId, organization, ct);
@@ -277,7 +303,7 @@ public sealed class AzureDevOpsClient
             lastMergeSourceCommit = new { commitId = lastMergeSourceCommitId },
             completionOptions = new
             {
-                mergeStrategy = "rebase",
+                mergeStrategy,
                 deleteSourceBranch = false,
                 bypassPolicy = false
             }

@@ -3,6 +3,7 @@
 
 import { CreatedPullRequestResult } from '../models/created-pull-request-result';
 export interface MultiTeamBatchCreateReleasePullRequestsResponse {
+  alreadyInSyncRepositories?: Array<string> | null;
   results: Array<CreatedPullRequestResult>;
   skippedDecommissionedRepositories: Array<string>;
   teamErrors: Array<string>;

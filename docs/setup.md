@@ -106,11 +106,11 @@ The dashboard onboarding checklist mirrors these steps.
 1. **Draft** — create a release (title + optional sprint). Status starts as `Draft`.
 2. **Start / Active** — use **Start release**, or open the first PR batch (auto-promotes to `Active`).
 3. **Phases** — for each team, batch-create PRs:
-   - **Prod → Dev** when prod is ahead of dev (back-merge).
-   - **Dev → Master** for promotion into master.
+   - **Dev → Master** for promotion into master. Being ahead of master and prod is dev's normal state.
    - **Master → Prod** only after the matching Dev → Master PR is **Completed** (gate).
+   - **Prod → Dev** (back-merge) is a pre-step: both promotions open it automatically for repositories where prod has commits dev is missing. Merge it first; the promotion picks those commits up from dev. It can also be run on its own, and repositories already in sync are skipped.
 4. **Status sync** — refreshed automatically in the background (see above); open a release detail page or click **Check status** for an immediate refresh.
-5. **Complete** — **Complete all (rebase)** merges open PRs in a phase via ADO.
+5. **Complete** — **Complete all** merges open PRs in a phase via ADO: promotions rebase and fast-forward, Prod → Dev uses a merge commit so prod stops being ahead of dev.
 6. **Close / Archive** — **Close release** → `Completed` (blocks further batches); **Archive** → `Archived`.
 
 Commit notes can be refreshed from ADO and exported as markdown. Conventional-commit grouping and Jira link extraction are controlled in global **Settings**.

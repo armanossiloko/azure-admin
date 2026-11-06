@@ -93,11 +93,6 @@
             <span style="font-size: 13px; font-weight: 500">Master → Prod</span>
           </label>
         </div>
-        @if (phase() === 'ProdToDev') {
-          <div class="muted" style="font-size: 12px; margin-top: var(--s-2)">
-            First step when prod drifted ahead of dev. Merge these PRs before starting Dev → Master.
-          </div>
-        }
         @if (phase() === 'MasterToProd') {
           <div class="muted" style="font-size: 12px; margin-top: var(--s-2)">
             Requires a completed Dev → Master pull request for each selected repository on this release.
@@ -257,13 +252,21 @@
     </div>
   }
 
+  @if (alreadyInSync().length) {
+    <div class="banner info" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">
+        Already in sync, no pull request needed: {{ alreadyInSync().join(', ') }}.
+      </div>
+    </div>
+  }
+
   @if ((created()?.results?.length ?? 0) > 0) {
     <div class="card" style="margin-bottom: var(--s-5)">
       <div class="card-header">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
-        <h3 class="card-title">Created PRs</h3>
+        <h3 class="card-title">Pull requests</h3>
       </div>
       <div class="card-body">
         <div style="display: flex; flex-direction: column; gap: 6px">
@@ -279,9 +282,14 @@
             >
               <div style="flex: 1; min-width: 0">
                 <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px">{{ c.repositoryIdOrName }}</div>
-                <div class="muted" style="font-size: 11px">PR #{{ c.pullRequestId }}</div>
+                <div class="muted" style="font-size: 11px; display: flex; align-items: center; gap: 6px">
+                  <span>PR #{{ c.pullRequestId }}</span>
+                  @if (c.phase) {
+                    <span class="badge draft">{{ phaseLabel(c.phase) }}</span>
+                  }
+                </div>
                 @if (c.note) {
-                  <div style="font-size: 12px; margin-top: 4px; color: var(--warn)">{{ c.note }}</div>
+                  <div class="muted" style="font-size: 12px; margin-top: 4px">{{ c.note }}</div>
                 }
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">

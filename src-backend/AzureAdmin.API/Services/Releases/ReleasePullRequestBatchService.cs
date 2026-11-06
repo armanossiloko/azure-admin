@@ -12,6 +12,15 @@ namespace AzureAdmin.API.Services.Releases;
 
 public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
 {
+    private const string ProdToDevPreStepNote =
+        "Opened automatically as a pre-step: prod has commits dev is missing. Merge this first; the promotion picks them up from dev.";
+
+    private const string AlreadyInSyncNotice =
+        "Already in sync: nothing to merge, so no pull request will be opened.";
+
+    private const string MasterAheadIssue =
+        "master has commits dev is missing, and prod does not. Merge those commits into dev before opening Dev → Master.";
+
     private readonly ApplicationDbContext _db;
     private readonly AzureDevOpsClient _ado;
     private readonly ICurrentUser _currentUser;
@@ -81,7 +90,10 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     .Where(n => !string.IsNullOrWhiteSpace(n))
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                if (!branchNames.Contains(BranchShortName(sourceBranch) ?? sourceBranch))
+                // A repository with no prod branch simply has nothing to back-merge.
+                var sourceIsOptional = request.Phase == ReleasePrPhase.ProdToDev
+                                       && string.IsNullOrWhiteSpace(request.SourceBranch);
+                if (!sourceIsOptional && !branchNames.Contains(BranchShortName(sourceBranch) ?? sourceBranch))
                     issues.Add($"Source branch '{BranchShortName(sourceBranch) ?? sourceBranch}' was not found.");
                 if (!branchNames.Contains(BranchShortName(targetBranch) ?? targetBranch))
                     issues.Add($"Target branch '{BranchShortName(targetBranch) ?? targetBranch}' was not found.");
@@ -96,46 +108,25 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
             }
 
             var notices = new List<string>();
-            var drift = await GetBranchDriftAsync(userId, repo, cancellationToken);
-            if (drift.Error is not null)
-                issues.Add(drift.Error);
-            else if (request.Phase == ReleasePrPhase.ProdToDev)
+            if (request.Phase == ReleasePrPhase.ProdToDev)
             {
-                if (!drift.ProdAhead)
-                {
-                    issues.Add(
-                        "prod is not ahead of dev — there is nothing to back-merge. " +
-                        "Use Dev → Master or Master → Prod once neither branch is ahead of dev.");
-                }
-                else
-                {
-                    var reason = DescribeDrift(drift);
-                    var backMergeIssue = await GetProdToDevBlockerAsync(releaseId, repo, reason, cancellationToken);
-                    if (backMergeIssue is not null)
-                        issues.Add(backMergeIssue);
-                }
-            }
-            else if (drift.ProdAhead)
-            {
-                var reason = DescribeDrift(drift);
-                var backMergeIssue = await GetProdToDevBlockerAsync(releaseId, repo, reason, cancellationToken);
-                if (backMergeIssue is not null)
-                    issues.Add(backMergeIssue);
-                else
-                {
-                    notices.Add(
-                        $"{reason}. Select Prod → Dev (or continue — this batch will open prod → dev instead of {PromotionLabel(request.Phase)}). " +
-                        "Dev → master and master → prod stay closed until prod is not ahead of dev.");
-                }
-            }
-            else if (drift.MasterAhead)
-            {
-                issues.Add(
-                    "master is ahead of dev, and prod is not. Neither master nor prod may contain commits that are not in dev " +
-                    "before a release promotion. Merge those master commits into dev before opening Dev → Master or Master → Prod.");
+                var ahead = await TryCountCommitsAheadAsync(
+                    userId, repo, BranchShortName(sourceBranch)!, BranchShortName(targetBranch)!, cancellationToken);
+                if (ahead.Error is not null)
+                    issues.Add(ahead.Error);
+                else if (ahead.Ahead == 0)
+                    notices.Add(AlreadyInSyncNotice);
             }
             else
             {
+                var drift = await GetBranchDriftAsync(userId, repo, cancellationToken);
+                if (drift.Error is not null)
+                    issues.Add(drift.Error);
+                else if (drift.ProdAhead)
+                    notices.Add(ProdToDevPreStepNote);
+                else if (drift.MasterAhead && request.Phase == ReleasePrPhase.DevToMaster)
+                    issues.Add(MasterAheadIssue);
+
                 if (request.Phase == ReleasePrPhase.MasterToProd)
                 {
                     var gateIssue = await GetMasterToProdGateIssueAsync(userId, releaseId, repo, cancellationToken);
@@ -150,16 +141,11 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                               && pr.Phase == request.Phase,
                         cancellationToken);
 
-                if (existing is not null
-                    && existing.Status is not (ReleasePullRequestStatus.Abandoned or ReleasePullRequestStatus.Unknown))
+                // Active rows are reused and abandoned or unknown ones are cleaned up by the create path.
+                if (existing?.Status == ReleasePullRequestStatus.Completed)
                 {
-                    // Unknown may still be abandoned in ADO; create path cleans that up. Active/Completed block.
-                    if (existing.Status is ReleasePullRequestStatus.Active or ReleasePullRequestStatus.Completed)
-                    {
-                        issues.Add(
-                            $"A {existing.Status.ToString().ToLowerInvariant()} pull request for this phase already exists " +
-                            $"(#{existing.AzureDevOpsPullRequestId}).");
-                    }
+                    issues.Add(
+                        $"A completed pull request for this phase already exists (#{existing.AzureDevOpsPullRequestId}).");
                 }
             }
 
@@ -209,39 +195,25 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         var targetBranch = ResolveTargetBranch(request);
         var pullRequestTitle = BuildPullRequestTitle(request.Phase, release.SprintLabel);
 
-        var driftByRepoId = new Dictionary<Guid, BranchDrift>();
-        foreach (var repo in activeRepos)
-        {
-            var drift = await GetBranchDriftAsync(userId, repo, cancellationToken);
-            if (drift.Error is not null)
-                throw new InvalidOperationException($"{repo.RepositoryIdOrName}: {drift.Error}");
-            driftByRepoId[repo.Id] = drift;
-        }
+        var results = new List<CreatedPullRequestResult>();
 
         if (request.Phase == ReleasePrPhase.ProdToDev)
         {
-            var notAhead = activeRepos
-                .Where(r => !driftByRepoId[r.Id].ProdAhead)
-                .Select(r => r.RepositoryIdOrName)
-                .ToList();
-            if (notAhead.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    $"prod is not ahead of dev in {string.Join(", ", notAhead)}. " +
-                    "Prod → Dev is only for repositories where prod has commits that are not in dev.");
-            }
-
-            await RemoveAbandonedOrMissingPullRequestRowsAsync(
-                userId,
-                releaseId,
-                ReleasePrPhase.ProdToDev,
-                activeRepos.Select(r => r.Id).ToList(),
-                cancellationToken);
-
-            var results = new List<CreatedPullRequestResult>();
+            var alreadyInSync = new List<string>();
             foreach (var repo in activeRepos)
             {
-                results.Add(await CreateStoredPullRequestAsync(
+                var ahead = await TryCountCommitsAheadAsync(
+                    userId, repo, BranchShortName(sourceBranch)!, BranchShortName(targetBranch)!, cancellationToken);
+                if (ahead.Error is not null)
+                    throw new InvalidOperationException($"{repo.RepositoryIdOrName}: {ahead.Error}");
+
+                if (ahead.Ahead == 0)
+                {
+                    alreadyInSync.Add(string.IsNullOrWhiteSpace(repo.ServiceName) ? repo.RepositoryIdOrName : repo.ServiceName);
+                    continue;
+                }
+
+                results.Add(await EnsurePullRequestAsync(
                     userId,
                     releaseId,
                     teamId,
@@ -255,28 +227,34 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     cancellationToken));
             }
 
-            await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
-            return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
+            if (results.Count > 0)
+                await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
+
+            return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned, alreadyInSync);
         }
 
-        var masterBlocked = activeRepos
-            .Where(r => driftByRepoId[r.Id].MasterAhead && !driftByRepoId[r.Id].ProdAhead)
-            .Select(r => r.RepositoryIdOrName)
-            .ToList();
-        if (masterBlocked.Count > 0)
+        var driftByRepoId = new Dictionary<Guid, BranchDrift>();
+        foreach (var repo in activeRepos)
         {
-            throw new InvalidOperationException(
-                $"master is ahead of dev in {string.Join(", ", masterBlocked)}. " +
-                "Neither master nor prod may be ahead of dev before a release promotion, and prod is not ahead of dev there. " +
-                "Merge those commits into dev before opening Dev → Master or Master → Prod.");
+            var drift = await GetBranchDriftAsync(userId, repo, cancellationToken);
+            if (drift.Error is not null)
+                throw new InvalidOperationException($"{repo.RepositoryIdOrName}: {drift.Error}");
+            driftByRepoId[repo.Id] = drift;
         }
 
-        var forwardRepos = activeRepos.Where(r => !driftByRepoId[r.Id].ProdAhead).ToList();
-        var backMergeRepos = activeRepos.Where(r => driftByRepoId[r.Id].ProdAhead).ToList();
+        if (request.Phase == ReleasePrPhase.DevToMaster)
+        {
+            var masterBlocked = activeRepos
+                .Where(r => driftByRepoId[r.Id].MasterAhead && !driftByRepoId[r.Id].ProdAhead)
+                .Select(r => r.RepositoryIdOrName)
+                .ToList();
+            if (masterBlocked.Count > 0)
+                throw new InvalidOperationException($"{string.Join(", ", masterBlocked)}: {MasterAheadIssue}");
+        }
 
         if (request.Phase == ReleasePrPhase.MasterToProd)
         {
-            foreach (var repo in forwardRepos)
+            foreach (var repo in activeRepos)
             {
                 var gateIssue = await GetMasterToProdGateIssueAsync(userId, releaseId, repo, cancellationToken);
                 if (gateIssue is not null)
@@ -284,30 +262,26 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
             }
         }
 
-        if (forwardRepos.Count > 0)
+        var preStepTitle = BuildPullRequestTitle(ReleasePrPhase.ProdToDev, release.SprintLabel);
+        foreach (var repo in activeRepos)
         {
-            await RemoveAbandonedOrMissingPullRequestRowsAsync(
-                userId,
-                releaseId,
-                request.Phase,
-                forwardRepos.Select(r => r.Id).ToList(),
-                cancellationToken);
-        }
+            if (driftByRepoId[repo.Id].ProdAhead)
+            {
+                results.Add(await EnsurePullRequestAsync(
+                    userId,
+                    releaseId,
+                    teamId,
+                    repo,
+                    ReleasePrPhase.ProdToDev,
+                    sourceBranch: "prod",
+                    targetBranch: "dev",
+                    preStepTitle,
+                    BuildPreStepDescription(request.Description),
+                    ProdToDevPreStepNote,
+                    cancellationToken));
+            }
 
-        if (backMergeRepos.Count > 0)
-        {
-            await RemoveAbandonedOrMissingPullRequestRowsAsync(
-                userId,
-                releaseId,
-                ReleasePrPhase.ProdToDev,
-                backMergeRepos.Select(r => r.Id).ToList(),
-                cancellationToken);
-        }
-
-        var created = new List<CreatedPullRequestResult>();
-        foreach (var repo in forwardRepos)
-        {
-            created.Add(await CreateStoredPullRequestAsync(
+            results.Add(await EnsurePullRequestAsync(
                 userId,
                 releaseId,
                 teamId,
@@ -321,33 +295,8 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                 cancellationToken));
         }
 
-        if (backMergeRepos.Count > 0)
-        {
-            var backMergeTitle = BuildPullRequestTitle(ReleasePrPhase.ProdToDev, release.SprintLabel);
-            var promotionLabel = PromotionLabel(request.Phase);
-            foreach (var repo in backMergeRepos)
-            {
-                var reason = DescribeDrift(driftByRepoId[repo.Id]);
-                var note =
-                    $"{reason}. Opened prod → dev instead of {promotionLabel}. " +
-                    "Release promotions stay closed until prod is not ahead of dev. Merge this pull request, then run the promotion again.";
-                created.Add(await CreateStoredPullRequestAsync(
-                    userId,
-                    releaseId,
-                    teamId,
-                    repo,
-                    ReleasePrPhase.ProdToDev,
-                    sourceBranch: "prod",
-                    targetBranch: "dev",
-                    backMergeTitle,
-                    BuildBackMergeDescription(note, request.Description),
-                    note,
-                    cancellationToken));
-            }
-        }
-
         await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
-        return new BatchCreateReleasePullRequestsResponse(created, skippedDecommissioned);
+        return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
     }
 
     public async Task<MultiTeamBatchCreateReleasePullRequestsResponse> CreatePullRequestsForMultipleTeamsAsync(
@@ -361,6 +310,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         var created = new List<CreatedPullRequestResult>();
         var skipped = new List<string>();
         var teamErrors = new List<string>();
+        var alreadyInSync = new List<string>();
 
         foreach (var teamBatch in request.Teams)
         {
@@ -386,6 +336,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     releaseId, teamBatch.TeamId, single, cancellationToken);
                 created.AddRange(result.Results);
                 skipped.AddRange(result.SkippedDecommissionedRepositories);
+                alreadyInSync.AddRange(result.AlreadyInSyncRepositories ?? []);
             }
             catch (InvalidOperationException ex)
             {
@@ -401,7 +352,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         if (createdIds.Count > 0)
             await _webhooks.NotifyPrBatchCreatedAsync(releaseId, request.Phase, createdIds, cancellationToken);
 
-        return new MultiTeamBatchCreateReleasePullRequestsResponse(created, skipped, teamErrors);
+        return new MultiTeamBatchCreateReleasePullRequestsResponse(created, skipped, teamErrors, alreadyInSync);
     }
 
     private async Task<(List<RegisteredRepository> Active, List<string> SkippedDecommissioned)> LoadAndValidateReposAsync(
@@ -448,9 +399,9 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
     }
 
     /// <summary>
-    /// Neither master nor prod may contain commits that dev does not have.
-    /// If prod is ahead, the only allowed pull request is prod → dev.
-    /// The dev → master / master → prod cycle runs only after prod is not ahead of dev.
+    /// Whether prod or master contain commits that dev does not have. Dev being ahead of them is the
+    /// normal state of a release. When prod is ahead, a prod → dev pull request is opened automatically
+    /// next to the promotion.
     /// </summary>
     private async Task<BranchDrift> GetBranchDriftAsync(
         Guid userId,
@@ -467,15 +418,6 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
             return new BranchDrift(false, false, string.Join(" ", errors));
 
         return new BranchDrift(prod.Ahead > 0, master.Ahead > 0, null);
-    }
-
-    private static string DescribeDrift(BranchDrift drift)
-    {
-        if (drift.ProdAhead && drift.MasterAhead)
-            return "prod and master are ahead of dev";
-        if (drift.ProdAhead)
-            return "prod is ahead of dev";
-        return "master is ahead of dev";
     }
 
     /// <summary>
@@ -522,39 +464,75 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         || ex.Message.Contains("GitUnresolvableToCommitException", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// An active or completed prod → dev pull request blocks another back-merge while prod is still ahead of dev.
+    /// Returns the pull request for this release, repository and phase, opening one only when needed:
+    /// an active one is reused, an abandoned or deleted one is replaced. A completed prod → dev pull
+    /// request is replaced too, because this is only called when prod has gained commits since.
     /// </summary>
-    private async Task<string?> GetProdToDevBlockerAsync(
+    private async Task<CreatedPullRequestResult> EnsurePullRequestAsync(
+        Guid userId,
         Guid releaseId,
+        Guid teamId,
         RegisteredRepository repo,
-        string driftReason,
+        ReleasePrPhase phase,
+        string sourceBranch,
+        string targetBranch,
+        string title,
+        string? description,
+        string? note,
         CancellationToken cancellationToken)
     {
-        var existing = await _db.ReleasePullRequests.AsNoTracking()
-            .FirstOrDefaultAsync(
-                pr => pr.ReleaseId == releaseId
-                      && pr.RegisteredRepositoryId == repo.Id
-                      && pr.Phase == ReleasePrPhase.ProdToDev,
-                cancellationToken);
+        var existing = await _db.ReleasePullRequests.FirstOrDefaultAsync(
+            pr => pr.ReleaseId == releaseId && pr.RegisteredRepositoryId == repo.Id && pr.Phase == phase,
+            cancellationToken);
 
-        if (existing is null)
-            return null;
-
-        if (existing.Status == ReleasePullRequestStatus.Completed)
+        if (existing is not null)
         {
-            return
-                $"Prod → dev pull request #{existing.AzureDevOpsPullRequestId} is completed, but {driftReason}. " +
-                "Remove it from this release before opening another.";
+            string? status;
+            try
+            {
+                status = await _ado.TryGetGitPullRequestStatusAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    existing.AzureDevOpsPullRequestId,
+                    cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Could not verify existing pull request #{existing.AzureDevOpsPullRequestId} in Azure DevOps. " +
+                    "Check your PAT and organization access. " + ex.Message);
+            }
+
+            var remote = ReleasePullRequestStatusMapper.Map(status);
+            if (remote == ReleasePullRequestStatus.Active)
+            {
+                return new CreatedPullRequestResult(
+                    repo.RepositoryIdOrName,
+                    existing.AzureDevOpsPullRequestId,
+                    existing.Url,
+                    note ?? "This pull request was already open.",
+                    Id: null,
+                    phase);
+            }
+
+            var replaceable = ShouldRemoveStalePullRequestRow(status)
+                              || (remote == ReleasePullRequestStatus.Completed && phase == ReleasePrPhase.ProdToDev);
+            if (!replaceable)
+            {
+                throw new InvalidOperationException(
+                    $"Pull request #{existing.AzureDevOpsPullRequestId} for repository '{repo.RepositoryIdOrName}' is " +
+                    $"'{status ?? "unknown"}' in Azure DevOps for this release phase. " +
+                    "Abandon it there (or wait until it completes) before creating another, or remove the entry from this release.");
+            }
+
+            _db.ReleasePullRequests.Remove(existing);
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
-        if (existing.Status == ReleasePullRequestStatus.Active)
-        {
-            return
-                $"Prod → dev pull request #{existing.AzureDevOpsPullRequestId} is still active ({driftReason}). " +
-                "Complete it before promoting.";
-        }
-
-        return null;
+        return await CreateStoredPullRequestAsync(
+            userId, releaseId, teamId, repo, phase, sourceBranch, targetBranch, title, description, note, cancellationToken);
     }
 
     private async Task<CreatedPullRequestResult> CreateStoredPullRequestAsync(
@@ -570,16 +548,35 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         string? note,
         CancellationToken cancellationToken)
     {
-        var created = await _ado.CreatePullRequestAsync(
-            userId,
-            organization: repo.AzureDevOpsOrganization,
-            project: repo.AzureDevOpsProject,
-            repositoryIdOrName: repo.RepositoryIdOrName,
-            sourceRefName: sourceBranch,
-            targetRefName: targetBranch,
-            title: title,
-            description: description,
-            ct: cancellationToken);
+        AzureDevOpsCreatePullRequestResponse created;
+        try
+        {
+            created = await _ado.CreatePullRequestAsync(
+                userId,
+                organization: repo.AzureDevOpsOrganization,
+                project: repo.AzureDevOpsProject,
+                repositoryIdOrName: repo.RepositoryIdOrName,
+                sourceRefName: sourceBranch,
+                targetRefName: targetBranch,
+                title: title,
+                description: description,
+                ct: cancellationToken);
+        }
+        catch (HttpRequestException ex) when (IsPullRequestAlreadyOpen(ex))
+        {
+            // Opened by hand or by another release: track that one instead of failing.
+            var open = await _ado.TryFindActivePullRequestAsync(
+                userId,
+                repo.AzureDevOpsOrganization,
+                repo.AzureDevOpsProject,
+                repo.RepositoryIdOrName,
+                sourceBranch,
+                targetBranch,
+                cancellationToken);
+            if (open is null)
+                throw;
+            created = open;
+        }
 
         var id = Guid.NewGuid();
         _db.ReleasePullRequests.Add(new ReleasePullRequest
@@ -613,8 +610,12 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
             created.PullRequestId,
             cancellationToken);
 
-        return new CreatedPullRequestResult(repo.RepositoryIdOrName, created.PullRequestId, created.Url, note, id);
+        return new CreatedPullRequestResult(repo.RepositoryIdOrName, created.PullRequestId, created.Url, note, id, phase);
     }
+
+    private static bool IsPullRequestAlreadyOpen(HttpRequestException ex) =>
+        ex.Data[AzureDevOpsHttp.TypeKeyDataKey] is "GitPullRequestExistsException"
+        || ex.Message.Contains("TF401179", StringComparison.Ordinal);
 
     private sealed record BranchDrift(bool ProdAhead, bool MasterAhead, string? Error);
 
@@ -672,7 +673,9 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
     }
 
     /// <summary>
-    /// Completes (merges, no fast-forward) every pull request stored for this release + phase.
+    /// Completes every pull request stored for this release + phase. Prod → dev uses a merge commit:
+    /// a rebase would rewrite prod's commits onto dev, leaving prod ahead of dev forever. Promotions
+    /// rebase and fast-forward.
     /// Continues past individual failures (already completed, conflicts, unmet policies, ...) and reports them per PR.
     /// </summary>
     public async Task<IReadOnlyList<CompletedPullRequestResult>> CompletePullRequestsForPhaseAsync(
@@ -748,6 +751,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     repo.RepositoryIdOrName,
                     pr.AzureDevOpsPullRequestId,
                     snapshot.LastMergeSourceCommitId,
+                    phase == ReleasePrPhase.ProdToDev ? "noFastForward" : "rebase",
                     cancellationToken);
 
                 pr.Status = ReleasePullRequestStatus.Completed;
@@ -1055,68 +1059,6 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
     }
 
-    /// <summary>
-    /// Drops <see cref="ReleasePullRequest"/> rows when the linked Azure DevOps PR was abandoned or no longer exists,
-    /// so a new batch can recreate PRs. Active or completed PRs still block.
-    /// </summary>
-    private async Task RemoveAbandonedOrMissingPullRequestRowsAsync(
-        Guid userId,
-        Guid releaseId,
-        ReleasePrPhase phase,
-        IReadOnlyList<Guid> repoIds,
-        CancellationToken cancellationToken)
-    {
-        var conflicting = await _db.ReleasePullRequests
-            .Where(pr =>
-                pr.ReleaseId == releaseId &&
-                pr.Phase == phase &&
-                repoIds.Contains(pr.RegisteredRepositoryId))
-            .Include(pr => pr.RegisteredRepository)
-            .ToListAsync(cancellationToken);
-
-        if (conflicting.Count == 0)
-            return;
-
-        var toRemove = new List<ReleasePullRequest>();
-        foreach (var prRow in conflicting)
-        {
-            var repo = prRow.RegisteredRepository;
-            string? status;
-            try
-            {
-                status = await _ado.TryGetGitPullRequestStatusAsync(
-                    userId,
-                    repo.AzureDevOpsOrganization,
-                    repo.AzureDevOpsProject,
-                    repo.RepositoryIdOrName,
-                    prRow.AzureDevOpsPullRequestId,
-                    cancellationToken);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new InvalidOperationException(
-                    $"Could not verify existing pull request #{prRow.AzureDevOpsPullRequestId} in Azure DevOps. " +
-                    "Check your PAT and organization access. " + ex.Message);
-            }
-
-            if (ShouldRemoveStalePullRequestRow(status))
-                toRemove.Add(prRow);
-            else
-            {
-                throw new InvalidOperationException(
-                    $"Pull request #{prRow.AzureDevOpsPullRequestId} for repository '{repo.RepositoryIdOrName}' is still " +
-                    $"'{status ?? "unknown"}' in Azure DevOps for this release phase. " +
-                    "Abandon it there (or wait until it completes) before creating another, or remove the entry from this release.");
-            }
-        }
-
-        foreach (var row in toRemove)
-            _db.ReleasePullRequests.Remove(row);
-
-        if (toRemove.Count > 0)
-            await _db.SaveChangesAsync(cancellationToken);
-    }
-
     /// <summary>ADO returns status as a string (e.g. <c>abandoned</c>) or sometimes a numeric enum value.</summary>
     private static bool ShouldRemoveStalePullRequestRow(string? statusFromApi)
     {
@@ -1213,15 +1155,10 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         };
     }
 
-    private static string PromotionLabel(ReleasePrPhase phase) =>
-        phase == ReleasePrPhase.MasterToProd ? "master → prod" : "dev → master";
-
-    private static string BuildBackMergeDescription(string note, string? userDescription)
-    {
-        if (string.IsNullOrWhiteSpace(userDescription))
-            return note;
-        return note + "\n\n" + userDescription.Trim();
-    }
+    private static string BuildPreStepDescription(string? userDescription) =>
+        string.IsNullOrWhiteSpace(userDescription)
+            ? ProdToDevPreStepNote
+            : ProdToDevPreStepNote + "\n\n" + userDescription.Trim();
 
     private static string ResolveSourceBranch(BatchCreateReleasePullRequestsRequest request)
     {

@@ -542,7 +542,7 @@ export class ReleaseDetailPage implements OnInit {
 
     const phaseTitle = this.prPhaseBuckets.find((b) => b.key === phaseKey)?.title ?? phaseKey;
     const confirmed = confirm(
-      `Complete (rebase and fast-forward) ${prs.length} active PR${prs.length === 1 ? '' : 's'} in "${phaseTitle}"?\n\n` +
+      `Complete (${phaseKey === 'backmerge' ? 'merge commit' : 'rebase and fast-forward'}) ${prs.length} active PR${prs.length === 1 ? '' : 's'} in "${phaseTitle}"?\n\n` +
         'This merges directly in Azure DevOps and cannot be undone from here.'
     );
     if (!confirmed) return;

@@ -76,15 +76,19 @@ public sealed record BatchCreateReleasePullRequestsRequest(
 
 public sealed record BatchCreateReleasePullRequestsResponse(
     IReadOnlyList<CreatedPullRequestResult> Results,
-    IReadOnlyList<string> SkippedDecommissionedRepositories);
+    IReadOnlyList<string> SkippedDecommissionedRepositories,
+    /// <summary>Prod → Dev only: repositories skipped because the source has nothing the target is missing.</summary>
+    IReadOnlyList<string>? AlreadyInSyncRepositories = null);
 
 public sealed record CreatedPullRequestResult(
     string RepositoryIdOrName,
     int PullRequestId,
     string Url,
-    /// <summary>Set when this pull request is a prod → dev back-merge opened instead of the requested promotion.</summary>
+    /// <summary>Set when this pull request was opened automatically as the prod → dev pre-step, or was already open.</summary>
     string? Note = null,
-    Guid? Id = null);
+    /// <summary>Stored row id; null when the pull request was already open, so it is not announced again.</summary>
+    Guid? Id = null,
+    ReleasePrPhase? Phase = null);
 
 public sealed record TeamPullRequestBatch(Guid TeamId, IReadOnlyList<Guid> RegisteredRepositoryIds);
 
@@ -99,7 +103,9 @@ public sealed record MultiTeamBatchCreateReleasePullRequestsRequest(
 public sealed record MultiTeamBatchCreateReleasePullRequestsResponse(
     IReadOnlyList<CreatedPullRequestResult> Results,
     IReadOnlyList<string> SkippedDecommissionedRepositories,
-    IReadOnlyList<string> TeamErrors);
+    IReadOnlyList<string> TeamErrors,
+    /// <summary>Prod → Dev only: repositories skipped because the source has nothing the target is missing.</summary>
+    IReadOnlyList<string>? AlreadyInSyncRepositories = null);
 
 public sealed record BatchPreflightResponse(
     bool CanProceed,

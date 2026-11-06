@@ -2158,6 +2158,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "alreadyInSyncRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -2456,6 +2463,14 @@
           "id": {
             "type": "string",
             "format": "uuid",
+            "nullable": true
+          },
+          "phase": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleasePrPhase"
+              }
+            ],
             "nullable": true
           }
         },
@@ -2864,6 +2879,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "alreadyInSyncRepositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false
