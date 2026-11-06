@@ -3,6 +3,7 @@
 
 import { ReleasePrPhase } from '../models/release-pr-phase';
 export interface BatchCreateReleasePullRequestsRequest {
+  autoMergeProdToDev: boolean;
   description?: string | null;
   phase: ReleasePrPhase;
   registeredRepositoryIds: Array<string>;

@@ -82,6 +82,87 @@ public sealed class ReleasePullRequestBatchFlowTests
     }
 
     [Fact]
+    public async Task Auto_merge_merges_the_back_merge_and_then_opens_the_promotion()
+    {
+        await using var flow = new Flow();
+        flow.Ado.Branch("dev", "base", "feature");
+        flow.Ado.Branch("master", "base");
+        flow.Ado.Branch("prod", "base", "hotfix");
+
+        var created = await flow.CreateAsync(ReleasePrPhase.DevToMaster, autoMerge: true);
+
+        Assert.Equal(
+            [ReleasePrPhase.ProdToDev, ReleasePrPhase.DevToMaster],
+            created.Results.Select(r => r.Phase!.Value));
+        Assert.Contains("Merged automatically", created.Results[0].Note);
+        Assert.Empty(created.PromotionHeldBackRepositories!);
+        Assert.Equal("noFastForward", Assert.Single(flow.Ado.MergeStrategies));
+        Assert.Equal(ReleasePullRequestStatus.Completed, await flow.StoredStatusAsync(ReleasePrPhase.ProdToDev));
+    }
+
+    [Fact]
+    public async Task Auto_merge_does_nothing_when_prod_is_not_ahead()
+    {
+        await using var flow = new Flow();
+        flow.Ado.Branch("dev", "base", "feature");
+        flow.Ado.Branch("master", "base");
+        flow.Ado.Branch("prod", "base");
+
+        var created = await flow.CreateAsync(ReleasePrPhase.DevToMaster, autoMerge: true);
+
+        Assert.Equal(ReleasePrPhase.DevToMaster, Assert.Single(created.Results).Phase);
+        Assert.Empty(flow.Ado.MergeStrategies);
+    }
+
+    [Theory]
+    [InlineData("conflicts", false, "conflicts")]
+    [InlineData("rejectedByPolicy", false, "policy")]
+    [InlineData(null, true, "TF402")]
+    [InlineData(null, false, "not finished")]
+    public async Task Auto_merge_failure_holds_back_only_that_repository(
+        string? mergeStatus, bool rejectCompletion, string expectedReason)
+    {
+        await using var flow = new Flow();
+        flow.Ado.Branch("dev", "base", "feature");
+        flow.Ado.Branch("master", "base");
+        flow.Ado.Branch("prod", "base", "hotfix");
+        var clean = await flow.AddRepositoryAsync("clean");
+        flow.Ado.RepoBranch("clean", "dev", "base", "feature");
+        flow.Ado.RepoBranch("clean", "master", "base");
+        flow.Ado.RepoBranch("clean", "prod", "base");
+        flow.Ado.MergeStatus = mergeStatus;
+        flow.Ado.RejectCompletion = rejectCompletion;
+        flow.Ado.CompletionFinishes = false;
+
+        var created = await flow.CreateAsync(ReleasePrPhase.DevToMaster, flow.RepoId, clean, autoMerge: true);
+
+        var held = created.Results.Single(r => r.RepositoryIdOrName == "repo");
+        Assert.Equal(ReleasePrPhase.ProdToDev, held.Phase);
+        Assert.Contains(expectedReason, held.Note);
+        Assert.Equal("repo", Assert.Single(created.PromotionHeldBackRepositories!));
+        Assert.Equal(ReleasePrPhase.DevToMaster, created.Results.Single(r => r.RepositoryIdOrName == "clean").Phase);
+    }
+
+    [Fact]
+    public async Task Running_again_after_merging_a_held_back_repository_opens_the_promotion()
+    {
+        await using var flow = new Flow();
+        flow.Ado.Branch("dev", "base", "feature");
+        flow.Ado.Branch("master", "base");
+        flow.Ado.Branch("prod", "base", "hotfix");
+        flow.Ado.MergeStatus = "conflicts";
+        var first = await flow.CreateAsync(ReleasePrPhase.DevToMaster, autoMerge: true);
+        flow.Ado.MergeStatus = null;
+        flow.Ado.Status[first.Results[0].PullRequestId] = "completed";
+        flow.Ado.Branch("dev", "base", "feature", "hotfix");
+
+        var second = await flow.CreateAsync(ReleasePrPhase.DevToMaster, autoMerge: true);
+
+        Assert.Equal(ReleasePrPhase.DevToMaster, Assert.Single(second.Results).Phase);
+        Assert.Empty(second.PromotionHeldBackRepositories!);
+    }
+
+    [Fact]
     public async Task Prod_to_dev_skips_a_repository_that_is_in_sync_and_opens_the_one_that_is_not()
     {
         await using var flow = new Flow();
@@ -283,7 +364,10 @@ public sealed class ReleasePullRequestBatchFlowTests
                     new StaticOptionsMonitor<AppOptions>(new AppOptions()),
                     NullLogger<OutboundWebhookPublisher>.Instance),
                 new FixedPatResolver(),
-                NullLogger<ReleasePullRequestBatchService>.Instance);
+                NullLogger<ReleasePullRequestBatchService>.Instance)
+            {
+                AutoMergeWaitBudget = TimeSpan.Zero
+            };
         }
 
         public async Task<Guid> AddRepositoryAsync(string name, string? serviceName = null)
@@ -328,6 +412,23 @@ public sealed class ReleasePullRequestBatchFlowTests
         public Task<BatchCreateReleasePullRequestsResponse> CreateAsync(ReleasePrPhase phase, params Guid[] repoIds) =>
             Service.CreatePullRequestsForReleaseAsync(ReleaseId, TeamId, Request(phase, repoIds), CancellationToken.None);
 
+        public Task<BatchCreateReleasePullRequestsResponse> CreateAsync(ReleasePrPhase phase, bool autoMerge) =>
+            CreateAsync(phase, [RepoId], autoMerge);
+
+        public Task<BatchCreateReleasePullRequestsResponse> CreateAsync(ReleasePrPhase phase, Guid first, Guid second, bool autoMerge) =>
+            CreateAsync(phase, [first, second], autoMerge);
+
+        private Task<BatchCreateReleasePullRequestsResponse> CreateAsync(ReleasePrPhase phase, Guid[] repoIds, bool autoMerge) =>
+            Service.CreatePullRequestsForReleaseAsync(
+                ReleaseId,
+                TeamId,
+                Request(phase, repoIds) with { AutoMergeProdToDev = autoMerge },
+                CancellationToken.None);
+
+        public async Task<ReleasePullRequestStatus> StoredStatusAsync(ReleasePrPhase phase) =>
+            (await _db.ReleasePullRequests.AsNoTracking()
+                .SingleAsync(pr => pr.ReleaseId == ReleaseId && pr.Phase == phase)).Status;
+
         public async Task<ReleaseLifecycleStatus> ReleaseStatusAsync() =>
             (await _db.Releases.AsNoTracking().SingleAsync(r => r.Id == ReleaseId)).Status;
 
@@ -350,6 +451,9 @@ public sealed class ReleasePullRequestBatchFlowTests
         public Dictionary<int, string> Status { get; } = new();
         public List<(string Source, string Target)> Opened { get; } = new();
         public List<string> MergeStrategies { get; } = new();
+        public string? MergeStatus { get; set; }
+        public bool RejectCompletion { get; set; }
+        public bool CompletionFinishes { get; set; } = true;
 
         public void Branch(string branch, params string[] commits) => RepoBranch("repo", branch, commits);
 
@@ -427,17 +531,21 @@ public sealed class ReleasePullRequestBatchFlowTests
                 return Json(new
                 {
                     status = Status[pullRequestId],
-                    mergeStatus = "succeeded",
+                    mergeStatus = MergeStatus ?? "succeeded",
                     lastMergeSourceCommit = new { commitId = "tip" }
                 });
             }
+
+            if (RejectCompletion)
+                return Error(HttpStatusCode.BadRequest, "TF402000: The pull request cannot be completed.", "GitPullRequestCannotBeActivated");
 
             using (var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct)))
             {
                 MergeStrategies.Add(body.RootElement.GetProperty("completionOptions").GetProperty("mergeStrategy").GetString()!);
             }
 
-            Status[pullRequestId] = "completed";
+            if (CompletionFinishes)
+                Status[pullRequestId] = "completed";
             return Json(new { });
         }
 

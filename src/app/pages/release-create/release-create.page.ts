@@ -39,7 +39,8 @@ type ReleaseForBatchContext = {
 export class ReleaseCreatePage implements OnInit {
   protected readonly sprintLabel = signal(this.defaultSprintLabel());
   protected readonly releaseTitle = signal(`Release sprint ${this.defaultSprintLabel()}`);
-  protected readonly phase = signal<ReleasePrPhase>('DevToMaster');
+  protected readonly phase = signal<'DevToMaster' | 'MasterToProd'>('DevToMaster');
+  protected readonly autoMergeProdToDev = signal(false);
   protected readonly fromBranch = signal('');
   protected readonly toBranch = signal('');
   protected readonly description = signal<string>('');
@@ -54,6 +55,7 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly created = signal<BatchCreateResponse | null>(null);
   protected readonly skippedDecommissioned = signal<string[]>([]);
   protected readonly alreadyInSync = signal<string[]>([]);
+  protected readonly promotionHeldBack = signal<string[]>([]);
   protected readonly preflightIssues = signal<string[]>([]);
 
   /** When set, PRs are added to this release directly (no find-or-create). */
@@ -68,8 +70,6 @@ export class ReleaseCreatePage implements OnInit {
     const s = this.sprintLabel().trim();
     const label = s || 'sprint ????/??';
     switch (this.phase()) {
-      case 'ProdToDev':
-        return `Release prod into dev - Release ${label}`;
       case 'MasterToProd':
         return `Release master into prod - Release ${label}`;
       default:
@@ -79,8 +79,6 @@ export class ReleaseCreatePage implements OnInit {
 
   protected readonly phaseHint = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'Default branches: prod → dev. Repositories where prod has nothing dev is missing are skipped. Optional: the other phases open these automatically when needed.';
       case 'MasterToProd':
         return 'Default branches: master → prod (override below if needed). Requires a completed Dev → Master PR. Also opens Prod → Dev where prod has commits dev is missing.';
       default:
@@ -90,8 +88,6 @@ export class ReleaseCreatePage implements OnInit {
 
   protected readonly fromBranchPlaceholder = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'default: prod';
       case 'MasterToProd':
         return 'default: master';
       default:
@@ -101,8 +97,6 @@ export class ReleaseCreatePage implements OnInit {
 
   protected readonly toBranchPlaceholder = computed(() => {
     switch (this.phase()) {
-      case 'ProdToDev':
-        return 'default: dev';
       case 'MasterToProd':
         return 'default: prod';
       default:
@@ -122,9 +116,7 @@ export class ReleaseCreatePage implements OnInit {
   }
 
   protected setPhase(v: string): void {
-    if (v === 'ProdToDev') this.phase.set('ProdToDev');
-    else if (v === 'MasterToProd') this.phase.set('MasterToProd');
-    else this.phase.set('DevToMaster');
+    this.phase.set(v === 'MasterToProd' ? 'MasterToProd' : 'DevToMaster');
     this.fromBranch.set('');
     this.toBranch.set('');
   }
@@ -305,6 +297,7 @@ export class ReleaseCreatePage implements OnInit {
     this.created.set(null);
     this.skippedDecommissioned.set([]);
     this.alreadyInSync.set([]);
+    this.promotionHeldBack.set([]);
     this.preflightIssues.set([]);
 
     const included = [...this.includedTeamIds()];
@@ -356,7 +349,8 @@ export class ReleaseCreatePage implements OnInit {
         title: this.prTitle(),
         description: this.description().trim() || null,
         sourceBranch: this.fromBranch().trim() || null,
-        targetBranch: this.toBranch().trim() || null
+        targetBranch: this.toBranch().trim() || null,
+        autoMergeProdToDev: this.autoMergeProdToDev()
       };
 
       const teamErrors: string[] = [];
@@ -413,6 +407,7 @@ export class ReleaseCreatePage implements OnInit {
         skipped.push(...(resp?.skippedDecommissionedRepositories ?? []));
         teamErrors.push(...(resp?.teamErrors ?? []));
         this.alreadyInSync.set(resp?.alreadyInSyncRepositories ?? []);
+        this.promotionHeldBack.set(resp?.promotionHeldBackRepositories ?? []);
       } catch (e: unknown) {
         teamErrors.push(apiErrorMessage(e));
       }

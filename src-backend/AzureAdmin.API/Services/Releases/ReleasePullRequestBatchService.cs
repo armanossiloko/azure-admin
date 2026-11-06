@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http;
 using AzureAdmin.API.Contracts;
 using AzureAdmin.API.Data;
@@ -15,11 +16,19 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
     private const string ProdToDevPreStepNote =
         "Opened automatically as a pre-step: prod has commits dev is missing. Merge this first; the promotion picks them up from dev.";
 
+    private const string ProdToDevMergeStrategy = "noFastForward";
+
+    private const string AutoMergedNote =
+        "Merged automatically: prod's commits are now in dev.";
+
     private const string AlreadyInSyncNotice =
         "Already in sync: nothing to merge, so no pull request will be opened.";
 
     private const string MasterAheadIssue =
         "master has commits dev is missing, and prod does not. Merge those commits into dev before opening Dev → Master.";
+
+    /// <summary>Total time one batch waits on automatic merges, so a large batch cannot outlast the request.</summary>
+    internal TimeSpan AutoMergeWaitBudget { get; set; } = TimeSpan.FromSeconds(20);
 
     private readonly ApplicationDbContext _db;
     private readonly AzureDevOpsClient _ado;
@@ -172,7 +181,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
     {
         var release = await _db.Releases.AsNoTracking()
             .Where(r => r.Id == releaseId)
-            .Select(r => new { r.SprintLabel, r.Status })
+            .Select(r => new { r.Title, r.SprintLabel, r.Status, r.CreatedByUserId })
             .FirstOrDefaultAsync(cancellationToken);
         if (release is null)
             throw new InvalidOperationException("Release was not found.");
@@ -263,11 +272,14 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         }
 
         var preStepTitle = BuildPullRequestTitle(ReleasePrPhase.ProdToDev, release.SprintLabel);
+        var heldBack = new List<string>();
+        var autoMerged = new List<Guid>();
+        var autoMergeWait = Stopwatch.StartNew();
         foreach (var repo in activeRepos)
         {
             if (driftByRepoId[repo.Id].ProdAhead)
             {
-                results.Add(await EnsurePullRequestAsync(
+                var preStep = await EnsurePullRequestAsync(
                     userId,
                     releaseId,
                     teamId,
@@ -278,7 +290,26 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     preStepTitle,
                     BuildPreStepDescription(request.Description),
                     ProdToDevPreStepNote,
-                    cancellationToken));
+                    cancellationToken);
+
+                if (request.AutoMergeProdToDev)
+                {
+                    var failure = await TryAutoMergeProdToDevAsync(
+                        userId, releaseId, release.Title, release.CreatedByUserId, repo, autoMerged, autoMergeWait, cancellationToken);
+                    if (failure is not null)
+                    {
+                        results.Add(preStep with
+                        {
+                            Note = $"Could not merge automatically: {failure} Merge it, then run this batch again to open the promotion."
+                        });
+                        heldBack.Add(string.IsNullOrWhiteSpace(repo.ServiceName) ? repo.RepositoryIdOrName : repo.ServiceName);
+                        continue;
+                    }
+
+                    preStep = preStep with { Note = AutoMergedNote };
+                }
+
+                results.Add(preStep);
             }
 
             results.Add(await EnsurePullRequestAsync(
@@ -295,8 +326,98 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                 cancellationToken));
         }
 
+        if (autoMerged.Count > 0)
+            await _webhooks.NotifyPrMergedAsync(releaseId, ReleasePrPhase.ProdToDev, autoMerged, [], cancellationToken);
+
         await PromoteReleaseToActiveIfDraftAsync(releaseId, cancellationToken);
-        return new BatchCreateReleasePullRequestsResponse(results, skippedDecommissioned);
+        return new BatchCreateReleasePullRequestsResponse(
+            results, skippedDecommissioned, PromotionHeldBackRepositories: heldBack);
+    }
+
+    /// <summary>
+    /// Merges the stored prod → dev pull request with a merge commit, honouring branch policies.
+    /// Azure DevOps merges asynchronously, so this waits for it to report completed.
+    /// Returns null once merged, otherwise the reason it did not finish.
+    /// </summary>
+    private async Task<string?> TryAutoMergeProdToDevAsync(
+        Guid userId,
+        Guid releaseId,
+        string releaseTitle,
+        Guid? releaseCreator,
+        RegisteredRepository repo,
+        List<Guid> autoMerged,
+        Stopwatch wait,
+        CancellationToken cancellationToken)
+    {
+        var row = await _db.ReleasePullRequests.FirstAsync(
+            pr => pr.ReleaseId == releaseId && pr.RegisteredRepositoryId == repo.Id && pr.Phase == ReleasePrPhase.ProdToDev,
+            cancellationToken);
+
+        var completionRequested = false;
+        try
+        {
+            while (true)
+            {
+                var snapshot = await _ado.TryGetPullRequestSnapshotAsync(
+                    userId,
+                    repo.AzureDevOpsOrganization,
+                    repo.AzureDevOpsProject,
+                    repo.RepositoryIdOrName,
+                    row.AzureDevOpsPullRequestId,
+                    cancellationToken);
+                if (snapshot is null)
+                    return "the pull request no longer exists in Azure DevOps.";
+
+                var status = ReleasePullRequestStatusMapper.Map(snapshot.Status);
+                if (status == ReleasePullRequestStatus.Completed)
+                {
+                    row.Status = ReleasePullRequestStatus.Completed;
+                    await _db.SaveChangesAsync(cancellationToken);
+                    await NotifyPrMergedAsync(
+                        MergeNotificationRecipient(row.CreatedByUserId, releaseCreator, fallback: userId),
+                        releaseId, releaseTitle, row, repo, cancellationToken);
+                    autoMerged.Add(row.Id);
+                    return null;
+                }
+
+                if (status == ReleasePullRequestStatus.Abandoned)
+                    return "the pull request was abandoned.";
+
+                var mergeFailure = snapshot.MergeStatus?.ToLowerInvariant() switch
+                {
+                    "conflicts" => "it has merge conflicts.",
+                    "rejectedbypolicy" => "a branch policy rejected the merge.",
+                    "failure" => "Azure DevOps could not merge it.",
+                    _ => null
+                };
+                if (mergeFailure is not null)
+                    return mergeFailure;
+
+                if (!completionRequested && !string.IsNullOrEmpty(snapshot.LastMergeSourceCommitId))
+                {
+                    await _ado.CompletePullRequestAsync(
+                        userId,
+                        repo.AzureDevOpsOrganization,
+                        repo.AzureDevOpsProject,
+                        repo.RepositoryIdOrName,
+                        row.AzureDevOpsPullRequestId,
+                        snapshot.LastMergeSourceCommitId,
+                        ProdToDevMergeStrategy,
+                        cancellationToken);
+                    completionRequested = true;
+                    continue;
+                }
+
+                if (wait.Elapsed >= AutoMergeWaitBudget)
+                    return "it has not finished merging; required reviewers or checks may be pending.";
+
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            return ex.Message;
+        }
     }
 
     public async Task<MultiTeamBatchCreateReleasePullRequestsResponse> CreatePullRequestsForMultipleTeamsAsync(
@@ -311,6 +432,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         var skipped = new List<string>();
         var teamErrors = new List<string>();
         var alreadyInSync = new List<string>();
+        var heldBack = new List<string>();
 
         foreach (var teamBatch in request.Teams)
         {
@@ -328,7 +450,8 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                 request.Description,
                 request.SourceBranch,
                 request.TargetBranch,
-                teamBatch.RegisteredRepositoryIds);
+                teamBatch.RegisteredRepositoryIds,
+                request.AutoMergeProdToDev);
 
             try
             {
@@ -337,6 +460,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                 created.AddRange(result.Results);
                 skipped.AddRange(result.SkippedDecommissionedRepositories);
                 alreadyInSync.AddRange(result.AlreadyInSyncRepositories ?? []);
+                heldBack.AddRange(result.PromotionHeldBackRepositories ?? []);
             }
             catch (InvalidOperationException ex)
             {
@@ -352,7 +476,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
         if (createdIds.Count > 0)
             await _webhooks.NotifyPrBatchCreatedAsync(releaseId, request.Phase, createdIds, cancellationToken);
 
-        return new MultiTeamBatchCreateReleasePullRequestsResponse(created, skipped, teamErrors, alreadyInSync);
+        return new MultiTeamBatchCreateReleasePullRequestsResponse(created, skipped, teamErrors, alreadyInSync, heldBack);
     }
 
     private async Task<(List<RegisteredRepository> Active, List<string> SkippedDecommissioned)> LoadAndValidateReposAsync(
@@ -751,7 +875,7 @@ public sealed class ReleasePullRequestBatchService : IPullRequestStatusRefresher
                     repo.RepositoryIdOrName,
                     pr.AzureDevOpsPullRequestId,
                     snapshot.LastMergeSourceCommitId,
-                    phase == ReleasePrPhase.ProdToDev ? "noFastForward" : "rebase",
+                    phase == ReleasePrPhase.ProdToDev ? ProdToDevMergeStrategy : "rebase",
                     cancellationToken);
 
                 pr.Status = ReleasePullRequestStatus.Completed;

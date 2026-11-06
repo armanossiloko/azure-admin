@@ -4,6 +4,7 @@
 import { ReleasePrPhase } from '../models/release-pr-phase';
 import { TeamPullRequestBatch } from '../models/team-pull-request-batch';
 export interface MultiTeamBatchCreateReleasePullRequestsRequest {
+  autoMergeProdToDev: boolean;
   description?: string | null;
   phase: ReleasePrPhase;
   sourceBranch?: string | null;

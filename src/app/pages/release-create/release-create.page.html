@@ -43,7 +43,6 @@
       </div>
       <h1 class="page-title">{{ existingRelease() ? 'Add pull requests to this release' : 'Create team PRs for a release' }}</h1>
       <div style="display: flex; align-items: center; gap: 8px; margin-top: var(--s-2)">
-        <span class="badge draft" *ngIf="phase() === 'ProdToDev'">prod → dev</span>
         <span class="badge draft" *ngIf="phase() === 'DevToMaster'">dev → master</span>
         <span class="badge draft" *ngIf="phase() === 'MasterToProd'">master → prod</span>
         <span class="badge">multi-team</span>
@@ -75,12 +74,6 @@
         <label class="field-label">Release phase</label>
         <div style="display: flex; flex-wrap: wrap; gap: var(--s-2)">
           <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
-                 [style.background]="phase() === 'ProdToDev' ? 'var(--bg-3)' : 'transparent'"
-                 [style.border-color]="phase() === 'ProdToDev' ? 'var(--accent)' : 'var(--border)'">
-            <input type="radio" name="phase" value="ProdToDev" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
-            <span style="font-size: 13px; font-weight: 500">Prod → Dev</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-3); cursor: pointer; transition: all 0.12s"
                  [style.background]="phase() === 'DevToMaster' ? 'var(--bg-3)' : 'transparent'"
                  [style.border-color]="phase() === 'DevToMaster' ? 'var(--accent)' : 'var(--border)'">
             <input type="radio" name="phase" value="DevToMaster" [ngModel]="phase()" (ngModelChange)="setPhase($event)" class="radio" />
@@ -99,6 +92,14 @@
           </div>
         }
         <div class="field-hint">{{ phaseHint() }}</div>
+      </div>
+
+      <div class="field" style="margin-bottom: var(--s-4)">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+          <input type="checkbox" class="checkbox" [ngModel]="autoMergeProdToDev()" (ngModelChange)="autoMergeProdToDev.set($event)" [disabled]="isSubmitting()" />
+          <span style="font-size: 13px; font-weight: 500">Auto-merge Prod → Dev pull requests</span>
+        </label>
+        <div class="field-hint">Merges them into dev right away, within your branch policies. If one can't merge, that repository's promotion isn't opened until you merge it and run this again.</div>
       </div>
 
       <div class="field" style="margin-bottom: var(--s-4)">
@@ -256,6 +257,14 @@
     <div class="banner info" style="margin-bottom: var(--s-5)">
       <div class="banner-body">
         Already in sync, no pull request needed: {{ alreadyInSync().join(', ') }}.
+      </div>
+    </div>
+  }
+
+  @if (promotionHeldBack().length) {
+    <div class="banner warn" style="margin-bottom: var(--s-5)">
+      <div class="banner-body">
+        Promotion not opened because Prod → Dev didn't merge: {{ promotionHeldBack().join(', ') }}. Merge those pull requests, then run this again.
       </div>
     </div>
   }

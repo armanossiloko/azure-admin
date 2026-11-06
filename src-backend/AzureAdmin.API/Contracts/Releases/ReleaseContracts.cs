@@ -72,13 +72,17 @@ public sealed record BatchCreateReleasePullRequestsRequest(
     string? SourceBranch,
     /// <summary>When omitted, defaults to dev (ProdToDev), master (DevToMaster), or prod (MasterToProd).</summary>
     string? TargetBranch,
-    IReadOnlyList<Guid> RegisteredRepositoryIds);
+    IReadOnlyList<Guid> RegisteredRepositoryIds,
+    /// <summary>Merge the automatic prod → dev pull requests right away, and open a promotion only once that worked.</summary>
+    bool AutoMergeProdToDev = false);
 
 public sealed record BatchCreateReleasePullRequestsResponse(
     IReadOnlyList<CreatedPullRequestResult> Results,
     IReadOnlyList<string> SkippedDecommissionedRepositories,
     /// <summary>Prod → Dev only: repositories skipped because the source has nothing the target is missing.</summary>
-    IReadOnlyList<string>? AlreadyInSyncRepositories = null);
+    IReadOnlyList<string>? AlreadyInSyncRepositories = null,
+    /// <summary>Repositories whose promotion was not opened because the automatic prod → dev merge did not finish.</summary>
+    IReadOnlyList<string>? PromotionHeldBackRepositories = null);
 
 public sealed record CreatedPullRequestResult(
     string RepositoryIdOrName,
@@ -98,14 +102,18 @@ public sealed record MultiTeamBatchCreateReleasePullRequestsRequest(
     string? Description,
     string? SourceBranch,
     string? TargetBranch,
-    IReadOnlyList<TeamPullRequestBatch> Teams);
+    IReadOnlyList<TeamPullRequestBatch> Teams,
+    /// <summary>Merge the automatic prod → dev pull requests right away, and open a promotion only once that worked.</summary>
+    bool AutoMergeProdToDev = false);
 
 public sealed record MultiTeamBatchCreateReleasePullRequestsResponse(
     IReadOnlyList<CreatedPullRequestResult> Results,
     IReadOnlyList<string> SkippedDecommissionedRepositories,
     IReadOnlyList<string> TeamErrors,
     /// <summary>Prod → Dev only: repositories skipped because the source has nothing the target is missing.</summary>
-    IReadOnlyList<string>? AlreadyInSyncRepositories = null);
+    IReadOnlyList<string>? AlreadyInSyncRepositories = null,
+    /// <summary>Repositories whose promotion was not opened because the automatic prod → dev merge did not finish.</summary>
+    IReadOnlyList<string>? PromotionHeldBackRepositories = null);
 
 public sealed record BatchPreflightResponse(
     bool CanProceed,
