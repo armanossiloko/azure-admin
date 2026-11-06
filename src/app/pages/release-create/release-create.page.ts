@@ -53,6 +53,8 @@ export class ReleaseCreatePage implements OnInit {
   protected readonly isSubmitting = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly created = signal<BatchCreateResponse | null>(null);
+  /** The release the last submit found or created. It exists even if opening its PRs then failed. */
+  protected readonly submittedReleaseId = signal<string | null>(null);
   protected readonly skippedDecommissioned = signal<string[]>([]);
   protected readonly alreadyInSync = signal<string[]>([]);
   protected readonly promotionHeldBack = signal<string[]>([]);
@@ -295,6 +297,7 @@ export class ReleaseCreatePage implements OnInit {
   async submit(): Promise<void> {
     this.error.set(null);
     this.created.set(null);
+    this.submittedReleaseId.set(null);
     this.skippedDecommissioned.set([]);
     this.alreadyInSync.set([]);
     this.promotionHeldBack.set([]);
@@ -343,6 +346,7 @@ export class ReleaseCreatePage implements OnInit {
         });
         releaseId = release.id;
       }
+      this.submittedReleaseId.set(releaseId);
 
       const batchBase = {
         phase: this.phase(),
