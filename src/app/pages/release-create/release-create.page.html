@@ -335,7 +335,9 @@
   }
 
   <div style="display: flex; gap: var(--s-3); justify-content: flex-end">
-    @if (existingRelease(); as er3) {
+    @if (submittedReleaseId(); as releaseId) {
+      <a [routerLink]="['/releases', releaseId]" class="btn">View release</a>
+    } @else if (existingRelease(); as er3) {
       <a [routerLink]="['/releases', er3.id]" class="btn">Cancel</a>
     } @else {
       <a routerLink="/releases" class="btn">Cancel</a>
