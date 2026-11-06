@@ -95,16 +95,15 @@
                 @if (editingId() === t.id) {
                   <td>
                     <input
-                      class="input"
-                      style="height: 28px; font-size: 12.5px"
+                      class="input input-sm"
                       [ngModel]="editName()"
                       (ngModelChange)="editName.set($event)"
                     />
                   </td>
                   <td>
                     <select
-                      class="select"
-                      style="height: 28px; font-size: 12px"
+                      class="select select-sm"
+                      style="width: 100%"
                       [ngModel]="editParentId()"
                       (ngModelChange)="editParentId.set($event)"
                     >

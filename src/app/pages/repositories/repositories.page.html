@@ -196,12 +196,12 @@
       </svg>
       <h3 class="card-title">Catalog</h3>
       <div style="margin-left: auto; display: flex; align-items: center; gap: var(--s-3)">
-        <select class="select" style="width: 160px; height: 28px; font-size: 12px" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <select class="select select-sm" style="width: 160px" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
           <option value="">All statuses</option>
           <option value="active">Active</option>
           <option value="decommissioned">Decommissioned</option>
         </select>
-        <select class="select" style="width: 180px; height: 28px; font-size: 12px" [ngModel]="filterTeamId()" (ngModelChange)="filterTeamId.set($event); refresh()">
+        <select class="select select-sm" style="width: 180px" [ngModel]="filterTeamId()" (ngModelChange)="filterTeamId.set($event); refresh()">
           <option value="">All teams</option>
           <option *ngFor="let t of teams()" [value]="t.id">{{ t.name }}</option>
         </select>
@@ -225,9 +225,9 @@
               <tr *ngFor="let r of visibleRows()" [style.opacity]="r.isDecommissioned ? '0.72' : '1'">
                 <td>
                   <input
-                    class="input"
+                    class="input input-sm"
                     type="text"
-                    style="width: 100%; max-width: 200px; height: 28px; font-size: 12px"
+                    style="width: 100%; max-width: 200px"
                     [value]="r.serviceName ?? ''"
                     (blur)="onAliasBlur(r, $event)"
                     [disabled]="busy()"
@@ -238,8 +238,8 @@
                 <td class="muted" style="font-size: 12px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
                 <td>
                   <select
-                    class="select"
-                    style="height: 28px; font-size: 12px; max-width: 180px"
+                    class="select select-sm"
+                    style="width: 100%; max-width: 180px"
                     [ngModel]="r.teamId"
                     (ngModelChange)="onTeamChange(r, $event)"
                     [disabled]="busy()"
@@ -256,9 +256,9 @@
                 </td>
                 <td class="actions">
                   @if (r.isDecommissioned) {
-                    <button type="button" class="btn btn-sm" (click)="setDecommissioned(r, false)" [disabled]="busy()">Restore</button>
+                    <button type="button" class="btn btn-sm" style="min-width: 104px" (click)="setDecommissioned(r, false)" [disabled]="busy()">Restore</button>
                   } @else {
-                    <button type="button" class="btn btn-sm" (click)="setDecommissioned(r, true)" [disabled]="busy()">Decommission</button>
+                    <button type="button" class="btn btn-sm" style="min-width: 104px" (click)="setDecommissioned(r, true)" [disabled]="busy()">Decommission</button>
                   }
                   <button type="button" class="btn btn-sm btn-danger" (click)="remove(r)" [disabled]="busy()">Remove</button>
                 </td>
