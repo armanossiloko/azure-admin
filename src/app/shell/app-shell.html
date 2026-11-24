@@ -34,19 +34,19 @@
       <span class="kbd">/</span>
       <div *ngIf="searchOpen() && searchQuery().trim().length >= 2" class="menu" style="top: 100%; left: 0; right: 0; margin-top: 4px; max-height: 320px; overflow-y: auto">
         <ng-container *ngIf="searchBusy(); else searchResults">
-          <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">Searching…</div>
+          <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">Searching…</div>
         </ng-container>
         <ng-template #searchResults>
           <ng-container *ngIf="searchHits().length; else noSearchHits">
             <button type="button" class="menu-item" *ngFor="let hit of searchHits()" (click)="openSearchHit(hit)">
               <div style="flex: 1; min-width: 0; text-align: left">
-                <div style="font-size: 13px; font-weight: 500">{{ hit.title }}</div>
-                <div *ngIf="hit.subtitle" style="font-size: 11px; color: var(--text-3)">{{ hit.subtitle }}</div>
+                <div style="font-size: var(--fs-sm); font-weight: 500">{{ hit.title }}</div>
+                <div *ngIf="hit.subtitle" style="font-size: var(--fs-xs); color: var(--text-3)">{{ hit.subtitle }}</div>
               </div>
             </button>
           </ng-container>
           <ng-template #noSearchHits>
-            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No results.</div>
+            <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">No results.</div>
           </ng-template>
         </ng-template>
       </div>
@@ -60,25 +60,25 @@
           </svg>
         </button>
         <div *ngIf="activityMenuOpen() && navigation() as nav" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 280px; max-height: 320px; overflow-y: auto">
-          <div style="padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Recent</div>
+          <div class="menu-label">Recent</div>
           <ng-container *ngIf="nav.activityPreview.length; else noActivity">
             <ng-container *ngFor="let a of nav.activityPreview">
               <a *ngIf="a.href" class="menu-item" [routerLink]="a.href" (click)="closeActivityMenu()">
                 <div style="flex: 1; min-width: 0">
-                  <div style="font-size: 13px; font-weight: 500">{{ a.title }}</div>
-                  <div *ngIf="a.subtitle" style="font-size: 11px; color: var(--text-3)">{{ a.subtitle }}</div>
+                  <div style="font-size: var(--fs-sm); font-weight: 500">{{ a.title }}</div>
+                  <div *ngIf="a.subtitle" style="font-size: var(--fs-xs); color: var(--text-3)">{{ a.subtitle }}</div>
                 </div>
               </a>
               <div *ngIf="!a.href" class="menu-item" style="opacity: 0.65; cursor: default">
                 <div style="flex: 1; min-width: 0">
-                  <div style="font-size: 13px; font-weight: 500">{{ a.title }}</div>
-                  <div *ngIf="a.subtitle" style="font-size: 11px; color: var(--text-3)">{{ a.subtitle }}</div>
+                  <div style="font-size: var(--fs-sm); font-weight: 500">{{ a.title }}</div>
+                  <div *ngIf="a.subtitle" style="font-size: var(--fs-xs); color: var(--text-3)">{{ a.subtitle }}</div>
                 </div>
               </div>
             </ng-container>
           </ng-container>
           <ng-template #noActivity>
-            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No recent activity.</div>
+            <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">No recent activity.</div>
           </ng-template>
         </div>
       </div>
@@ -95,11 +95,11 @@
         </button>
         <div *ngIf="notificationsMenuOpen()" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 300px; max-height: 360px; overflow-y: auto">
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px">
-            <span style="font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Notifications</span>
-            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 2px 6px" (click)="markAllNotificationsRead()">Mark all read</button>
+            <span class="menu-label" style="padding: 0">Notifications</span>
+            <button type="button" class="btn btn-ghost" style="font-size: var(--fs-xs); padding: 2px 6px" (click)="markAllNotificationsRead()">Mark all read</button>
           </div>
           <ng-container *ngIf="notificationsLoading(); else notificationList">
-            <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">Loading…</div>
+            <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">Loading…</div>
           </ng-container>
           <ng-template #notificationList>
             <ng-container *ngIf="notifications().length; else noNotifications">
@@ -111,13 +111,13 @@
                 [style.opacity]="n.isRead ? '0.7' : '1'"
               >
                 <div style="flex: 1; min-width: 0; text-align: left">
-                  <div style="font-size: 13px; font-weight: 500">{{ n.title }}</div>
-                  <div *ngIf="n.body" style="font-size: 11px; color: var(--text-3); margin-top: 2px">{{ n.body }}</div>
+                  <div style="font-size: var(--fs-sm); font-weight: 500">{{ n.title }}</div>
+                  <div *ngIf="n.body" style="font-size: var(--fs-xs); color: var(--text-3); margin-top: 2px">{{ n.body }}</div>
                 </div>
               </button>
             </ng-container>
             <ng-template #noNotifications>
-              <div style="padding: 10px 12px; font-size: 12.5px; color: var(--text-3)">No notifications.</div>
+              <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">No notifications.</div>
             </ng-template>
           </ng-template>
         </div>
@@ -141,7 +141,7 @@
           </svg>
         </button>
         <div *ngIf="themeMenuOpen()" class="menu" role="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 180px">
-          <div style="padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em">Theme</div>
+          <div class="menu-label">Theme</div>
           <button
             type="button"
             class="menu-item"
@@ -168,8 +168,7 @@
         >
           <div class="avatar" *ngIf="auth.user() as u">{{ getInitials(u.displayName || u.email) }}</div>
           <div *ngIf="auth.user() as u" style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; white-space: nowrap">
-            <span style="font-size: 12.5px; font-weight: 500">{{ u.displayName || u.email }}</span>
-            <span style="font-size: 10.5px; color: var(--text-3)">Admin</span>
+            <span style="font-size: var(--fs-sm); font-weight: 500">{{ u.displayName || u.email }}</span>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="muted">
             <polyline points="6 9 12 15 18 9"/>
@@ -177,8 +176,8 @@
         </button>
         <div *ngIf="accountMenuOpen()" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 240px">
           <div *ngIf="auth.user() as u" style="padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px">
-            <div style="font-size: 13px; font-weight: 500">{{ u.displayName || u.email }}</div>
-            <div style="font-size: 11.5px; color: var(--text-3)">{{ u.email }}</div>
+            <div style="font-size: var(--fs-sm); font-weight: 500">{{ u.displayName || u.email }}</div>
+            <div style="font-size: var(--fs-xs); color: var(--text-3)">{{ u.email }}</div>
           </div>
           <button class="menu-item" (click)="closeAccountMenu(); navigateTo('/settings/azure-organizations')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
@@ -293,8 +292,8 @@
         <div *ngIf="orgMenuOpen() && (navigation()?.organizations?.length ?? 0) > 1" class="menu" style="bottom: 100%; left: 0; margin-bottom: 4px; min-width: 220px">
           <button type="button" class="menu-item" *ngFor="let o of navigation()!.organizations" (click)="selectOrganization(o.id)">
             <div style="flex: 1; text-align: left">
-              <div style="font-size: 13px">{{ o.displayName }}</div>
-              <div class="muted" style="font-size: 11px">{{ o.hasPatCredential ? 'PAT stored' : 'No PAT' }}</div>
+              <div style="font-size: var(--fs-sm)">{{ o.displayName }}</div>
+              <div class="muted" style="font-size: var(--fs-xs)">{{ o.hasPatCredential ? 'PAT stored' : 'No PAT' }}</div>
             </div>
           </button>
         </div>

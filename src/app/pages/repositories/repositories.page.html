@@ -34,7 +34,7 @@
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
-      <h3 class="card-title">Register repository</h3>
+      <h2 class="card-title">Register repository</h2>
     </div>
     <div class="card-body">
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--s-4); margin-bottom: var(--s-4)">
@@ -80,7 +80,7 @@
         <path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 1 0-11.5 2A4.5 4.5 0 0 0 7 19h10.5z"/>
       </svg>
       <div style="flex: 1">
-        <h3 class="card-title">Import from Azure DevOps</h3>
+        <h2 class="card-title">Import from Azure DevOps</h2>
         <p class="card-subtitle">Discover and import new repositories from your organization</p>
       </div>
       @if (importProjectName().trim()) {
@@ -141,7 +141,7 @@
       @if (importProjectName().trim()) {
         <div style="border-top: 1px solid var(--border-subtle); padding-top: var(--s-4); margin-top: var(--s-2)">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s-3)">
-            <span style="font-weight: 600; font-size: 13px">Repositories</span>
+            <span style="font-weight: 600; font-size: var(--fs-sm)">Repositories</span>
             <button
               type="button"
               class="btn btn-primary btn-sm"
@@ -172,9 +172,9 @@
                     [disabled]="busy() || alreadyImported"
                   />
                   <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px">
-                    <span class="mono" style="font-size: 12.5px">{{ r.name }}</span>
+                    <span class="mono" style="font-size: var(--fs-sm)">{{ r.name }}</span>
                     @if (alreadyImported) {
-                      <span class="badge ok" style="font-size: 10px">Already imported</span>
+                      <span class="badge ok" style="font-size: var(--fs-xs)">Already imported</span>
                     }
                   </div>
                 </label>
@@ -194,7 +194,7 @@
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
         <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
       </svg>
-      <h3 class="card-title">Catalog</h3>
+      <h2 class="card-title">Catalog</h2>
       <div style="margin-left: auto; display: flex; align-items: center; gap: var(--s-3)">
         <select class="select select-sm" style="width: 160px" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
           <option value="">All statuses</option>
@@ -235,7 +235,7 @@
                   />
                 </td>
                 <td class="mono">{{ r.repositoryIdOrName }}</td>
-                <td class="muted" style="font-size: 12px">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
+                <td class="muted" style="font-size: var(--fs-xs)">{{ r.azureDevOpsOrganization }} / {{ r.azureDevOpsProject }}</td>
                 <td>
                   <select
                     class="select select-sm"
