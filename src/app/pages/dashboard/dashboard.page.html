@@ -12,8 +12,8 @@
 
   <div class="page-header">
     <div class="titles">
-      <h1 class="page-title">Welcome back{{ auth.user()?.displayName ? ', ' + (auth.user()?.displayName || '') + '.' : '.' }}</h1>
-      <p class="page-subtitle">Here's where things stand across your organization today.</p>
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-subtitle">{{ data() ? summary(data()!.stats) : 'Releases, pull requests and repositories in this organization' }}</p>
     </div>
     <div class="actions">
       <button class="btn" routerLink="/releases">
@@ -40,26 +40,26 @@
 
   @if (data(); as d) {
     <div class="stats" style="margin-bottom: var(--s-7)">
-      <div class="stat">
+      <a class="stat" routerLink="/releases">
         <div class="label">Active releases</div>
         <div class="value">{{ d.stats.activeReleasesCount }}</div>
         <div class="delta">{{ activeReleasesDelta(d.stats) }}</div>
-      </div>
-      <div class="stat">
+      </a>
+      <a class="stat" routerLink="/releases">
         <div class="label">Open PRs</div>
         <div class="value">{{ d.stats.openPullRequestsCount }}</div>
         <div class="delta">{{ openPrsDelta(d.stats) }}</div>
-      </div>
-      <div class="stat">
+      </a>
+      <a class="stat" routerLink="/releases" [class.attention]="d.stats.pullRequestsNeedingAttentionCount > 0">
         <div class="label">PRs needing attention</div>
         <div class="value">{{ d.stats.pullRequestsNeedingAttentionCount }}</div>
         <div class="delta">{{ attentionDelta(d.stats) }}</div>
-      </div>
-      <div class="stat">
+      </a>
+      <a class="stat" routerLink="/repositories">
         <div class="label">Registered repositories</div>
         <div class="value">{{ d.stats.registeredRepositoriesCount }}</div>
         <div class="delta">{{ reposDelta(d.stats) }}</div>
-      </div>
+      </a>
     </div>
 
     <div
@@ -74,7 +74,7 @@
             <circle cx="15" cy="9" r="2"/>
           </svg>
           <div style="flex: 1">
-            <h3 class="card-title">Active releases</h3>
+            <h2 class="card-title">Active releases</h2>
             <p class="card-subtitle">In-flight batches & their progress</p>
           </div>
           <button class="btn btn-sm btn-ghost" routerLink="/releases">
@@ -147,7 +147,7 @@
               <polyline points="20 6 9 17 4 12"/>
             </svg>
             <div style="flex: 1">
-              <h3 class="card-title">Setup checklist</h3>
+              <h2 class="card-title">Setup checklist</h2>
               <p class="card-subtitle">Connect your org and ship the first release</p>
             </div>
             <span class="tag mono-tag">{{ checklistPercent(d.checklist) }}%</span>
@@ -282,22 +282,22 @@
                     style="padding: var(--s-3) var(--s-2); border-radius: var(--r-2); text-decoration: none; color: inherit; border-bottom: 1px solid var(--border-subtle)"
                   >
                     <div style="flex: 1; min-width: 0">
-                      <div style="font-weight: 500; font-size: 13.5px">{{ a.title }}</div>
+                      <div style="font-weight: 500; font-size: var(--fs-sm)">{{ a.title }}</div>
                       @if (a.subtitle) {
-                        <div class="muted" style="font-size: 12px">{{ a.subtitle }}</div>
+                        <div class="muted" style="font-size: var(--fs-xs)">{{ a.subtitle }}</div>
                       }
                     </div>
-                    <span class="muted" style="font-size: 11px; white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
+                    <span class="muted" style="font-size: var(--fs-xs); white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
                   </a>
                 } @else {
                   <div class="row" style="padding: var(--s-3) var(--s-2); border-bottom: 1px solid var(--border-subtle)">
                     <div style="flex: 1; min-width: 0">
-                      <div style="font-weight: 500; font-size: 13.5px">{{ a.title }}</div>
+                      <div style="font-weight: 500; font-size: var(--fs-sm)">{{ a.title }}</div>
                       @if (a.subtitle) {
-                        <div class="muted" style="font-size: 12px">{{ a.subtitle }}</div>
+                        <div class="muted" style="font-size: var(--fs-xs)">{{ a.subtitle }}</div>
                       }
                     </div>
-                    <span class="muted" style="font-size: 11px; white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
+                    <span class="muted" style="font-size: var(--fs-xs); white-space: nowrap">{{ a.occurredAt | date: 'short' }}</span>
                   </div>
                 }
               }

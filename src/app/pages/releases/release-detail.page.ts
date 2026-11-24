@@ -28,7 +28,7 @@ type PhaseBucketKey = 'dev' | 'prod' | 'backmerge';
     :host ::ng-deep .md-preview h1 { font-size: 1.35em; font-weight: 700; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); }
     :host ::ng-deep .md-preview h2 { font-size: 1.15em; font-weight: 600; margin: 20px 0 8px; }
     :host ::ng-deep .md-preview h3 { font-size: 1.0em; font-weight: 600; margin: 16px 0 6px; }
-    :host ::ng-deep .md-preview h4 { font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 12px 0 6px; }
+    :host ::ng-deep .md-preview h4 { font-size: 1em; font-weight: 600; color: var(--text-2); margin: 12px 0 6px; }
     :host ::ng-deep .md-preview ul { margin: 0 0 10px; padding-left: 18px; }
     :host ::ng-deep .md-preview li { margin: 3px 0; line-height: 1.55; }
     :host ::ng-deep .md-preview p { margin: 0 0 8px; }

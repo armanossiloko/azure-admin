@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DashboardApi, DashboardChecklistDto, DashboardDto, DashboardStatsDto } from '../../api';
-import { AuthService } from '../../auth/auth.service';
 import { SelectedOrgService } from '../../services/selected-org.service';
 
 @Component({
@@ -12,7 +11,6 @@ import { SelectedOrgService } from '../../services/selected-org.service';
   templateUrl: './dashboard.page.html'
 })
 export class DashboardPage {
-  protected readonly auth = inject(AuthService);
   private readonly dashboardApi = inject(DashboardApi);
   private readonly selectedOrg = inject(SelectedOrgService);
 
@@ -51,6 +49,16 @@ export class DashboardPage {
   protected checklistPercent(c: DashboardChecklistDto): number {
     const n = [c.hasAzureOrganization, c.hasTeam, c.hasRegisteredRepository, c.hasRelease].filter(Boolean).length;
     return Math.round((n / 4) * 100);
+  }
+
+  /** One-line status for the page header, leading with what needs action. */
+  protected summary(s: DashboardStatsDto): string {
+    const attention = s.pullRequestsNeedingAttentionCount;
+    if (attention > 0) {
+      return `${attention} pull request${attention === 1 ? ' needs' : 's need'} attention across ${s.activeReleasesCount} active release${s.activeReleasesCount === 1 ? '' : 's'}`;
+    }
+    if (s.activeReleasesCount === 0) return 'No releases in progress';
+    return `${s.activeReleasesCount} release${s.activeReleasesCount === 1 ? '' : 's'} in progress, no pull requests need attention`;
   }
 
   protected activeReleasesDelta(s: DashboardStatsDto): string {

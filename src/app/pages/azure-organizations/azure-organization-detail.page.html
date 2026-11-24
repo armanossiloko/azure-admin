@@ -2,12 +2,12 @@
   <div class="page-header">
     <div class="titles">
       <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
-        <a routerLink="/settings/azure-organizations" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Azure organizations</a>
-        <span style="color: var(--text-4); font-size: 13px">/</span>
-        <span style="color: var(--text-2); font-size: 13px">{{ o.organizationDisplay || o.organizationKey }}</span>
+        <a routerLink="/settings/azure-organizations" style="color: var(--text-3); text-decoration: none; font-size: var(--fs-sm); transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Azure organizations</a>
+        <span style="color: var(--text-4); font-size: var(--fs-sm)">/</span>
+        <span style="color: var(--text-2); font-size: var(--fs-sm)">{{ o.organizationDisplay || o.organizationKey }}</span>
       </div>
       <h1 class="page-title">{{ o.organizationDisplay || o.organizationKey }}</h1>
-      <div class="mono muted" style="font-size: 12px">{{ o.organizationKey }}</div>
+      <div class="mono muted" style="font-size: var(--fs-xs)">{{ o.organizationKey }}</div>
     </div>
   </div>
 
@@ -39,7 +39,7 @@
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
         <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
-      <h3 class="card-title">Personal Access Token (PAT)</h3>
+      <h2 class="card-title">Personal Access Token (PAT)</h2>
     </div>
     <div class="card-body">
       @if (o.hasPatCredential) {
@@ -50,12 +50,12 @@
               @if (patExpired(o)) {
                 <span class="badge danger pip">Expired {{ o.patExpiresAt | date: 'shortDate' }}</span>
               } @else {
-                <span class="muted" style="font-size: 12px">Expires {{ o.patExpiresAt | date: 'shortDate' }}</span>
+                <span class="muted" style="font-size: var(--fs-xs)">Expires {{ o.patExpiresAt | date: 'shortDate' }}</span>
               }
             }
           </div>
           @if (o.patUpdatedAt) {
-            <p class="muted" style="font-size: 11px">Last updated {{ o.patUpdatedAt | date: 'medium' }}</p>
+            <p class="muted" style="font-size: var(--fs-xs)">Last updated {{ o.patUpdatedAt | date: 'medium' }}</p>
           }
         </div>
       } @else {
@@ -82,7 +82,7 @@
           placeholder="Paste PAT from Azure DevOps" 
         />
         <div class="field-hint">
-          Create one at <code style="background: var(--bg-3); padding: 2px 6px; border-radius: 3px; font-size: 11px">dev.azure.com/{{ o.organizationKey }}/_usersSettings/tokens</code> with Code: Read & Write, and Pull Request Threads: Read & Write permissions.
+          Create one at <code style="background: var(--bg-3); padding: 2px 6px; border-radius: 3px; font-size: var(--fs-xs)">dev.azure.com/{{ o.organizationKey }}/_usersSettings/tokens</code> with Code: Read & Write, and Pull Request Threads: Read & Write permissions.
         </div>
       </div>
 
@@ -116,7 +116,7 @@
         <line x1="12" y1="16" x2="12" y2="12"/>
         <line x1="12" y1="8" x2="12" y2="8"/>
       </svg>
-      <h3 class="card-title">Organization settings</h3>
+      <h2 class="card-title">Organization settings</h2>
     </div>
     <div class="card-body">
       <div class="field" style="margin-bottom: var(--s-4)">

@@ -2,9 +2,9 @@
   <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap">
     <div class="titles">
       <div style="display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-1)">
-        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: 13px; transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
-        <span style="color: var(--text-4); font-size: 13px">/</span>
-        <span style="color: var(--text-2); font-size: 13px">{{ rel.title }}</span>
+        <a routerLink="/releases" style="color: var(--text-3); text-decoration: none; font-size: var(--fs-sm); transition: color 0.12s" (mouseenter)="$any($event.target).style.color = 'var(--text)'" (mouseleave)="$any($event.target).style.color = 'var(--text-3)'">Releases</a>
+        <span style="color: var(--text-4); font-size: var(--fs-sm)">/</span>
+        <span style="color: var(--text-2); font-size: var(--fs-sm)">{{ rel.title }}</span>
       </div>
       @if (editingMeta()) {
         <div style="display: grid; gap: var(--s-2); max-width: 480px">
@@ -24,7 +24,7 @@
         </div>
       } @else {
         <h1 class="page-title">{{ rel.title }}</h1>
-        <div style="display: flex; align-items: center; gap: var(--s-3); font-size: 13px; color: var(--text-3)">
+        <div style="display: flex; align-items: center; gap: var(--s-3); font-size: var(--fs-sm); color: var(--text-3)">
           <span [class]="statusBadgeClass(rel.status)">{{ rel.status }}</span>
           <span *ngIf="rel.sprintLabel">Sprint {{ rel.sprintLabel }}</span>
           <span [title]="rel.createdAt | date: 'full'">
@@ -107,7 +107,7 @@
         <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
-      <h3 class="card-title">Teams in this release</h3>
+      <h2 class="card-title">Teams in this release</h2>
     </div>
     <div class="card-body">
       @if (!rel.teams.length) {
@@ -129,7 +129,7 @@
         <polyline points="12 6 12 12 16 14"/>
       </svg>
       <div style="flex: 1">
-        <h3 class="card-title">Pull requests by phase</h3>
+        <h2 class="card-title">Pull requests by phase</h2>
         <p class="card-subtitle">A release has promotion phases; each phase accumulates PRs from every batch you run for that phase.</p>
       </div>
     </div>
@@ -153,7 +153,7 @@
                 >
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
-                <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ bucket.title }}</h4>
+                <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">{{ bucket.title }}</h3>
               </button>
               <div style="display: flex; align-items: center; gap: var(--s-2)">
                 <span class="badge draft">{{ prs.length }} PR{{ prs.length === 1 ? '' : 's' }}</span>
@@ -201,8 +201,8 @@
                       <tr *ngFor="let pr of prs">
                         <td>{{ pr.teamName }}</td>
                         <td>
-                          <div style="font-weight: 500; font-size: 13px">{{ repoDisplay(pr) }}</div>
-                          <div class="mono muted" style="font-size: 11px">{{ pr.repositoryIdOrName }}</div>
+                          <div style="font-weight: 500; font-size: var(--fs-sm)">{{ repoDisplay(pr) }}</div>
+                          <div class="mono muted" style="font-size: var(--fs-xs)">{{ pr.repositoryIdOrName }}</div>
                         </td>
                         <td>{{ pr.title }}</td>
                         <td><span [class]="prStatusBadgeClass(pr.status)">{{ pr.status }}</span></td>
@@ -239,7 +239,7 @@
         @if (otherPrs.length) {
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
-              <h4 style="font-size: 14px; font-weight: 600; margin: 0">Other phase values</h4>
+              <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">Other phase values</h3>
               <span class="badge draft">{{ otherPrs.length }} PRs</span>
             </div>
             <div class="tbl-wrap" style="border: 1px solid var(--border-subtle); border-radius: var(--r-3); overflow: hidden">
@@ -258,8 +258,8 @@
                   <tr *ngFor="let pr of otherPrs">
                     <td>{{ pr.teamName }}</td>
                     <td>
-                      <div style="font-weight: 500; font-size: 13px">{{ repoDisplay(pr) }}</div>
-                      <div class="mono muted" style="font-size: 11px">{{ pr.repositoryIdOrName }}</div>
+                      <div style="font-weight: 500; font-size: var(--fs-sm)">{{ repoDisplay(pr) }}</div>
+                      <div class="mono muted" style="font-size: var(--fs-xs)">{{ pr.repositoryIdOrName }}</div>
                     </td>
                     <td><span class="badge draft">{{ phaseLabel(pr.phase) }}</span></td>
                     <td>{{ pr.title }}</td>
@@ -294,7 +294,7 @@
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
       </svg>
       <div style="flex: 1">
-        <h3 class="card-title">Release notes (commits)</h3>
+        <h2 class="card-title">Release notes (commits)</h2>
         <p class="card-subtitle">Commits from linked pull requests (or branch diff). Use Refresh after API changes.</p>
       </div>
       <div style="display: flex; gap: var(--s-2); flex-wrap: wrap">
@@ -339,7 +339,7 @@
                   >
                     <polyline points="6 9 12 15 18 9"/>
                   </svg>
-                  <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ bucket.title }}</h4>
+                  <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">{{ bucket.title }}</h3>
                 </button>
                 <div style="display: flex; align-items: center; gap: var(--s-2)">
                   <span class="badge draft">{{ blocks.length }} repo{{ blocks.length === 1 ? '' : 's' }}</span>
@@ -355,39 +355,39 @@
                     <div>
                       <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-subtle)">
                         <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap">
-                          <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h4>
-                          <div class="mono muted" style="font-size: 11px">
+                          <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h3>
+                          <div class="mono muted" style="font-size: var(--fs-xs)">
                             {{ block.sourceRefName }} → {{ block.targetRefName }}
                           </div>
                         </div>
                         <button type="button" class="btn btn-sm btn-ghost" (click)="copyMarkdown('repo', undefined, block)">Copy markdown</button>
                       </div>
                       @if (block.fetchedAt) {
-                        <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
+                        <p class="muted" style="font-size: var(--fs-xs); margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
                       }
                       @if (block.commitGroups?.length) {
                         <div style="display: flex; flex-direction: column; gap: var(--s-4)">
                           @for (group of block.commitGroups!; track group.groupName) {
                             <div>
-                              <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                              <h4 style="font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin: 0 0 var(--s-2)">{{ group.groupName }}</h4>
                               <div style="display: flex; flex-direction: column; gap: 4px">
                                 @for (c of group.commits; track c.commitId) {
                                   <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
-                                    <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                    <code style="font-size: var(--fs-xs); background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
                                     <div style="flex: 1; min-width: 0">
-                                      <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                      <div style="font-size: var(--fs-sm); line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
                                         @if (c.scope) {
-                                          <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                          <span class="badge" style="font-size: var(--fs-xs); flex-shrink: 0">{{ c.scope }}</span>
                                         }
                                         <span>{{ c.description }}</span>
                                         @if (c.isBreaking) {
-                                          <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                          <span class="badge danger" style="font-size: var(--fs-xs); flex-shrink: 0">BREAKING</span>
                                         }
                                         @for (jira of c.jiraReferences; track jira.key) {
-                                          <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                          <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: var(--fs-xs); color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
                                         }
                                       </div>
-                                      <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                      <div class="muted" style="font-size: var(--fs-xs)">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
                                     </div>
                                   </div>
                                 }
@@ -399,10 +399,10 @@
                         <div style="display: flex; flex-direction: column; gap: 6px">
                           @for (c of commitsForBlock(block); track c.commitId) {
                             <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
-                              <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                              <code style="font-size: var(--fs-xs); background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
                               <div style="flex: 1; min-width: 0">
-                                <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
-                                <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                <div style="font-size: var(--fs-sm); line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
+                                <div class="muted" style="font-size: var(--fs-xs)">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
                               </div>
                             </div>
                           }
@@ -423,7 +423,7 @@
           @if (otherNoteBlocks.length) {
             <div>
               <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3)">
-                <h4 style="font-size: 14px; font-weight: 600; margin: 0">Other phase values</h4>
+                <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">Other phase values</h3>
                 <span class="badge draft">{{ otherNoteBlocks.length }} repos</span>
               </div>
               <div style="display: flex; flex-direction: column; gap: var(--s-5)">
@@ -431,40 +431,40 @@
                   <div>
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--border-subtle)">
                       <div style="display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap">
-                        <h4 style="font-size: 14px; font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h4>
+                        <h3 style="font-size: var(--fs-base); font-weight: 600; margin: 0">{{ repoDisplayNotes(block) }}</h3>
                         <span class="badge draft">{{ phaseLabel(block.phase) }}</span>
-                        <div class="mono muted" style="font-size: 11px">
+                        <div class="mono muted" style="font-size: var(--fs-xs)">
                           {{ block.sourceRefName }} → {{ block.targetRefName }}
                         </div>
                       </div>
                       <button type="button" class="btn btn-sm btn-ghost" (click)="copyMarkdown('repo', undefined, block)">Copy markdown</button>
                     </div>
                     @if (block.fetchedAt) {
-                      <p class="muted" style="font-size: 11px; margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
+                      <p class="muted" style="font-size: var(--fs-xs); margin-bottom: var(--s-3)">Fetched {{ block.fetchedAt | date: 'medium' }}</p>
                     }
                     @if (block.commitGroups?.length) {
                       <div style="display: flex; flex-direction: column; gap: var(--s-4)">
                         @for (group of block.commitGroups!; track group.groupName) {
                           <div>
-                            <h5 style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); margin: 0 0 var(--s-2)">{{ group.groupName }}</h5>
+                            <h4 style="font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); margin: 0 0 var(--s-2)">{{ group.groupName }}</h4>
                             <div style="display: flex; flex-direction: column; gap: 4px">
                               @for (c of group.commits; track c.commitId) {
                                 <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
-                                  <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                                  <code style="font-size: var(--fs-xs); background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
                                   <div style="flex: 1; min-width: 0">
-                                    <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
+                                    <div style="font-size: var(--fs-sm); line-height: 1.4; margin-bottom: 2px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline">
                                       @if (c.scope) {
-                                        <span class="badge" style="font-size: 10px; flex-shrink: 0">{{ c.scope }}</span>
+                                        <span class="badge" style="font-size: var(--fs-xs); flex-shrink: 0">{{ c.scope }}</span>
                                       }
                                       <span>{{ c.description }}</span>
                                       @if (c.isBreaking) {
-                                        <span class="badge danger" style="font-size: 10px; flex-shrink: 0">BREAKING</span>
+                                        <span class="badge danger" style="font-size: var(--fs-xs); flex-shrink: 0">BREAKING</span>
                                       }
                                       @for (jira of c.jiraReferences; track jira.key) {
-                                        <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
+                                        <a [href]="jira.url" target="_blank" rel="noopener" style="font-size: var(--fs-xs); color: var(--accent); text-decoration: none; font-weight: 500" (mouseenter)="$any($event.target).style.textDecoration='underline'" (mouseleave)="$any($event.target).style.textDecoration='none'">{{ jira.key }}</a>
                                       }
                                     </div>
-                                    <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                                    <div class="muted" style="font-size: var(--fs-xs)">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
                                   </div>
                                 </div>
                               }
@@ -476,10 +476,10 @@
                       <div style="display: flex; flex-direction: column; gap: 6px">
                         @for (c of commitsForBlock(block); track c.commitId) {
                           <div style="display: flex; gap: var(--s-3); padding: 6px 0; border-left: 2px solid var(--border-subtle); padding-left: var(--s-3)">
-                            <code style="font-size: 11px; background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
+                            <code style="font-size: var(--fs-xs); background: var(--bg-3); padding: 2px 6px; border-radius: 3px; flex-shrink: 0">{{ c.commitId | slice: 0 : 7 }}</code>
                             <div style="flex: 1; min-width: 0">
-                              <div style="font-size: 13px; line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
-                              <div class="muted" style="font-size: 11px">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
+                              <div style="font-size: var(--fs-sm); line-height: 1.4; margin-bottom: 2px">{{ c.comment }}</div>
+                              <div class="muted" style="font-size: var(--fs-xs)">{{ c.authorName }} · {{ c.committedDate | date: 'short' }}</div>
                             </div>
                           </div>
                         }
@@ -508,8 +508,8 @@
       <div style="position: relative; z-index: 1; background: var(--bg-2); border-left: 1px solid var(--border); width: min(720px, 100vw); height: 100vh; display: flex; flex-direction: column; box-shadow: -8px 0 32px rgba(0,0,0,0.18)">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--border); flex-shrink: 0">
           <div>
-            <div style="font-size: 14px; font-weight: 600">Release notes preview</div>
-            <div class="muted" style="font-size: 11.5px; margin-top: 2px">Rendered output — same content as Copy all (markdown)</div>
+            <div style="font-size: var(--fs-base); font-weight: 600">Release notes preview</div>
+            <div class="muted" style="font-size: var(--fs-xs); margin-top: 2px">Rendered output — same content as Copy all (markdown)</div>
           </div>
           <button
             type="button"
@@ -523,7 +523,7 @@
             </svg>
           </button>
         </div>
-        <div class="md-preview" style="flex: 1; overflow-y: auto; padding: var(--s-5) var(--s-6); font-size: 13.5px; line-height: 1.6; color: var(--text)" [innerHTML]="previewHtml()"></div>
+        <div class="md-preview" style="flex: 1; overflow-y: auto; padding: var(--s-5) var(--s-6); font-size: var(--fs-sm); line-height: 1.6; color: var(--text)" [innerHTML]="previewHtml()"></div>
       </div>
     </div>
   }
