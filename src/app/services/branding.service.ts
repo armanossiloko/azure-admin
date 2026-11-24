@@ -9,7 +9,7 @@ export const DEFAULT_BRANDING: Branding = {
   applicationName: 'Azure Admin',
   tagline: 'Release control',
   description:
-    'Release control for Azure DevOps — teams, repositories, and promotion pull requests in one place.'
+    'Plan Azure DevOps releases across teams and repositories, and track every promotion pull request through to production.'
 };
 
 @Injectable({ providedIn: 'root' })
