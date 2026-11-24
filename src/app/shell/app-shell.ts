@@ -4,6 +4,7 @@ import {
   ElementRef,
   HostListener,
   OnInit,
+  computed,
   inject,
   signal,
   viewChild
@@ -68,6 +69,8 @@ export class AppShell implements OnInit {
   protected readonly navigationError = signal<string | null>(null);
   protected readonly notifications = signal<NotificationDto[]>([]);
   protected readonly notificationsLoading = signal(false);
+  protected readonly notificationsError = signal<string | null>(null);
+  protected readonly unreadCount = computed(() => this.navigation()?.unreadNotificationsCount ?? 0);
 
   private readonly searchTerms = new Subject<string>();
 
@@ -205,6 +208,7 @@ export class AppShell implements OnInit {
     this.notificationsMenuOpen.set(next);
     if (next) {
       this.closeOtherPanels('notifications');
+      this.notificationsError.set(null);
       await this.loadNotifications();
     }
   }
@@ -213,14 +217,19 @@ export class AppShell implements OnInit {
     this.notificationsMenuOpen.set(false);
   }
 
-  protected async loadNotifications(): Promise<void> {
-    this.notificationsLoading.set(true);
+  /**
+   * Loads the list and the unread count behind the bell dot. `showSpinner` is off when refreshing after
+   * an action, so the list doesn't flash to "Loading…" under the cursor.
+   */
+  protected async loadNotifications(showSpinner = true): Promise<void> {
+    if (showSpinner) this.notificationsLoading.set(true);
     try {
       const list = await this.notificationsApi.notificationsList();
       this.notifications.set(list ?? []);
       await this.loadNavigation();
     } catch {
-      this.notifications.set([]);
+      if (showSpinner) this.notifications.set([]);
+      this.notificationsError.set('Could not load notifications.');
     } finally {
       this.notificationsLoading.set(false);
     }
@@ -230,21 +239,33 @@ export class AppShell implements OnInit {
     ev.preventDefault();
     ev.stopPropagation();
     if (n.isRead) return;
+    this.notificationsError.set(null);
+    // Show the result at once; the reload below brings back the server's state either way.
+    this.notifications.update(list => list.map(x => (x.id === n.id ? { ...x, isRead: true } : x)));
+    this.setUnreadCount(Math.max(0, this.unreadCount() - 1));
     try {
       await this.notificationsApi.notificationsMarkRead({ id: n.id });
-      await this.loadNotifications();
     } catch {
-      /* ignore */
+      this.notificationsError.set('Could not mark the notification as read. Try again.');
     }
+    await this.loadNotifications(false);
   }
 
   protected async markAllNotificationsRead(): Promise<void> {
+    this.notificationsError.set(null);
+    this.notifications.update(list => list.map(x => ({ ...x, isRead: true })));
+    this.setUnreadCount(0);
     try {
       await this.notificationsApi.notificationsMarkAllRead();
-      await this.loadNotifications();
     } catch {
-      /* ignore */
+      this.notificationsError.set('Could not mark notifications as read. Try again.');
     }
+    await this.loadNotifications(false);
+  }
+
+  private setUnreadCount(count: number): void {
+    const nav = this.navigation();
+    if (nav) this.navigation.set({ ...nav, unreadNotificationsCount: count });
   }
 
   protected openNotification(n: NotificationDto): void {

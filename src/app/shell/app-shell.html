@@ -83,21 +83,35 @@
         </div>
       </div>
       <div style="position: relative" #notificationsPanel>
-        <button type="button" class="icon-btn" aria-label="Notifications" style="position: relative" (click)="toggleNotificationsMenu(); $event.stopPropagation()">
+        <button
+          type="button"
+          class="icon-btn"
+          [attr.aria-label]="unreadCount() > 0 ? 'Notifications, ' + unreadCount() + ' unread' : 'Notifications'"
+          style="position: relative"
+          (click)="toggleNotificationsMenu(); $event.stopPropagation()"
+        >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
             <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
             <path d="M10 21a2 2 0 0 0 4 0"/>
           </svg>
           <span
-            *ngIf="(navigation()?.unreadNotificationsCount ?? 0) > 0"
+            *ngIf="unreadCount() > 0"
             style="position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger)"
           ></span>
         </button>
         <div *ngIf="notificationsMenuOpen()" class="menu" style="top: 100%; right: 0; margin-top: 4px; min-width: 300px; max-height: 360px; overflow-y: auto">
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px">
-            <span class="menu-label" style="padding: 0">Notifications</span>
-            <button type="button" class="btn btn-ghost" style="font-size: var(--fs-xs); padding: 2px 6px" (click)="markAllNotificationsRead()">Mark all read</button>
+            <span class="menu-label" style="padding: 0">
+              Notifications<ng-container *ngIf="unreadCount() > 0"> · {{ unreadCount() }} unread</ng-container>
+            </span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              [disabled]="unreadCount() === 0"
+              (click)="markAllNotificationsRead(); $event.stopPropagation()"
+            >Mark all read</button>
           </div>
+          <div *ngIf="notificationsError()" class="notification-error" role="alert">{{ notificationsError() }}</div>
           <ng-container *ngIf="notificationsLoading(); else notificationList">
             <div style="padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-3)">Loading…</div>
           </ng-container>
@@ -105,13 +119,16 @@
             <ng-container *ngIf="notifications().length; else noNotifications">
               <button
                 type="button"
-                class="menu-item"
+                class="menu-item notification-item"
+                [class.unread]="!n.isRead"
                 *ngFor="let n of notifications()"
                 (click)="openNotification(n)"
-                [style.opacity]="n.isRead ? '0.7' : '1'"
               >
+                <span class="notification-pip" aria-hidden="true"></span>
                 <div style="flex: 1; min-width: 0; text-align: left">
-                  <div style="font-size: var(--fs-sm); font-weight: 500">{{ n.title }}</div>
+                  <div class="notification-title">
+                    {{ n.title }}<span *ngIf="!n.isRead" class="visually-hidden"> (unread)</span>
+                  </div>
                   <div *ngIf="n.body" style="font-size: var(--fs-xs); color: var(--text-3); margin-top: 2px">{{ n.body }}</div>
                 </div>
               </button>
