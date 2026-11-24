@@ -94,8 +94,10 @@ public sealed class NotificationService
                 existing.Title = title;
                 existing.Body = body;
                 existing.Href = $"/settings/azure-organizations/{row.OrgId}";
-                if (existing.ReadAt is not null && kind == "pat_expired")
-                    existing.ReadAt = null;
+                // Keep ReadAt as the user left it. This sync runs on every notification and navigation
+                // load, so clearing it here undid "mark as read" straight away. A new alert still comes
+                // when it should: the dedupe key includes the kind, so expiring-soon -> expired inserts
+                // a new row, and a renewed PAT deletes the old row, so a later expiry starts fresh.
             }
         }
 
